@@ -7,6 +7,7 @@ datasource db {
   provider = "postgresql"
 }
 
+/// @type master
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -16,16 +17,59 @@ model User {
   createdAt DateTime @default(now())
 }
 
+/// @type master
 model Product {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  price       Float
-  createdAt   DateTime @default(now())
+  id                    String                 @id @default(uuid())
+  name                  String
+  description           String?
+  price                 Float
+  createdAt             DateTime               @default(now())
+  salesTransactionsItem SalesTransactionItem[]
 }
 
+/// @type master
+model Customer {
+  id               String             @id @default(uuid())
+  name             String
+  email            String             @unique
+  phone            String?
+  createdAt        DateTime           @default(now())
+  salesTransaction SalesTransaction[]
+}
+
+/// @type transaction
+model SalesTransaction {
+  id                   String                 @id @default(uuid())
+  customerId           String
+  customer             Customer               @relation(fields: [customerId], references: [id])
+  salesTransactionItem SalesTransactionItem[]
+  total                Float
+  status               TransactionStatus      @default(PENDING)
+  createdAt            DateTime               @default(now())
+}
+
+/// @type transaction
+model SalesTransactionItem {
+  id            String @id @default(uuid())
+  transactionId String
+  productId     String
+
+  salesTransaction SalesTransaction @relation(fields: [transactionId], references: [id])
+  product          Product          @relation(fields: [productId], references: [id])
+
+  qty      Int
+  price    Float // harga saat transaksi
+  subtotal Float
+}
 
 enum Role {
+  SUPERADMIN
   ADMIN
   USER
+}
+
+enum TransactionStatus {
+  PENDING
+  PAID
+  CANCELED
 }
