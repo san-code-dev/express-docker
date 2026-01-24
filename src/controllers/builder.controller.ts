@@ -4,12 +4,6 @@ import fs from "fs";
 import path from "path";
 import { getDMMF } from "@prisma/internals";
 
-function parseModelType(doc?: string) {
-  if (!doc) return "unknown";
-  if (doc.includes("@type master")) return "master";
-  if (doc.includes("@type transaction")) return "transaction";
-  return "unknown";
-}
 
 const builderController = {
   async getSchema(req: AuthRequest, res: Response) {
@@ -26,9 +20,7 @@ const builderController = {
     const sanitized = {
       models: datamodel.models.map((model) => ({
         name: model.name,
-        type: parseModelType(model.documentation), // 🔥 INI KUNCINYA
         fields: model.fields
-          .filter((f) => f.name !== "password") //sembunyikan password
           .map((f) => ({
             name: f.name,
             type: f.type,
