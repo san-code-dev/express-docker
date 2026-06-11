@@ -7,7 +7,7 @@ import userRoutes from './master/masters.user.routes'
 const router = Router()
 
 router.use('/auth', authRoutes)
-router.use('/master/products', productRoutes)
-router.use('/master/users', userRoutes)
+router.use('/product', productRoutes)
+router.use('/user', userRoutes)
 
 export default router
