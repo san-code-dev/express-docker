@@ -1,9 +1,8 @@
 import { Request, Response } from 'express'
-import { AuthRequest } from '../middleware/auth.middleware'
-import prisma from "../lib/prisma";
+import prisma from "../../lib/prisma";
 
 const userController = {
-  async getAll(req: AuthRequest, res: Response) {
+  async getAll(req: Request, res: Response) {
     const users =  await prisma.user.findMany();
     res.json(users)
   },
@@ -12,7 +11,7 @@ const userController = {
     res.json({ id: req.params.id })
   },
 
-  async create(req: AuthRequest, res: Response) {
+  async create(req: Request, res: Response) {
     const { name, email, password } = req.body;
     const query= await prisma.user.create({
       data: {

@@ -1,16 +1,13 @@
 import { Request, Response, NextFunction } from "express";
-import { verifyToken } from "../utils/jwt";
+import { verifyToken } from "../utils/jwt"
+import { CustomJwtPayload } from "../utils/jwt";
 
-export interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    role: string;
-  };
+export interface AuthenticatedRequest extends Request {
+  user?: CustomJwtPayload;
 }
 
 const authMiddleware = (
-  req: AuthRequest,
+  req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
