@@ -10,6 +10,7 @@ npm install
 docker compose -f docker-compose.dev.yml up --build
 </pre>
 note: prisma migrated automatically by docker compose, 
+execute npx prisma generate everytime change prisma scheme
 execute docker compose down -v everytime added new library
 
 

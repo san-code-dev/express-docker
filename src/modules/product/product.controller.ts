@@ -21,7 +21,7 @@ const ProductController = {
 
   async create(req: Request, res: Response) {
     try {
-      const db = await ProductService.create(req.body);
+      const db = await ProductService.create();
       return res.status(201).json({
         message: 'Product created successfully',
         data: db
