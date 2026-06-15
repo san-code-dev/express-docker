@@ -1,10 +1,9 @@
 import prisma from '../../lib/prisma'
 
-
 const PERMISSION = {
     create: true,
     edit: true,
-    delete: false,
+    delete: true,
     update: true,
 };
 
@@ -22,21 +21,23 @@ const SCHEMA = {
     data: {},
 };
 
-
 export const ProductService = {
 
-    async getAll() {
+    // Tambahkan parameter 'where' dengan tipe data object default kosong
+    async getAll(where: any = {}) {
         const query = await prisma.product.findMany({
+            where: where, // <--- Filter dari frontend diterapkan di sini
             orderBy: { createdAt: 'asc' }
         });
 
-        // data yang mau ditampilkan di frontend
+        // Data yang mau ditampilkan di frontend
         const data = query.map(({ id, name, price, description }) => ({
             id,
             name,
             price,
             description,
         }));
+        
         SCHEMA.data = data;
         return SCHEMA;
     },

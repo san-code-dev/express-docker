@@ -1,12 +1,30 @@
 import { Request, Response } from 'express';
 import { ProductService } from './product.service';
-
-
+import { parseFilterToPrisma } from '../../utils/prismaFilterParser'; // <-- Import helper baru
 
 const ProductController = {
   async getAll(req: Request, res: Response) {
     try {
-      const db = await ProductService.getAll();
+      // 1. Tangkap parameter 'where' dari query string url
+      const { where } = req.query;
+      let rawWhere = {};
+      console.log(where)
+      // 2. Jika ada data filter, lakukan parsing dari JSON String ke Object/Array awal
+      if (where && typeof where === 'string') {
+        try {
+          rawWhere = JSON.parse(where);
+        } catch (parseError) {
+          console.error('Error parsing query where:', parseError);
+          return res.status(400).json({ message: 'Invalid filter format' });
+        }
+      }
+
+      // 🔥 KUNCI PERBAIKAN: Bersihkan & konversi data filter menggunakan helper reusable
+      const prismaWhere = parseFilterToPrisma(rawWhere);
+
+      // 3. Oper parameter prismaWhere yang SUDAH AMAN ke Service
+      const db = await ProductService.getAll(prismaWhere);
+      
       return res.json(db);
 
     } catch (error) {
@@ -16,7 +34,7 @@ const ProductController = {
   },
 
   async getById(req: Request, res: Response) {
-    // Implementasi untuk mendapatkan produk berdasarkan ID
+    // Implementasi...
   },
 
   async create(req: Request, res: Response) {
@@ -30,15 +48,14 @@ const ProductController = {
       console.error('Error create product:', error);
       return res.status(500).json({ message: 'Internal server error' });
     }
-    // Implementasi untuk membuat produk baru
   },
 
   async update(req: Request, res: Response) {
-    // Implementasi untuk memperbarui produk
+    // Implementasi...
   },
 
   async delete(req: Request, res: Response) {
-    // Implementasi untuk menghapus produk
+    // Implementasi...
   },
 };
 
