@@ -17,13 +17,14 @@ model User {
 }
 
 model Product {
-  id Int @id @default(autoincrement())
-  name        String?
-  description String?
-  price       Decimal @default(0)
-  createdAt   DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  name         String?
+  description  String?
+  price        Decimal  @default(0)
+  status       String   @default("active")      // 🌟 Tambahkan ini (untuk type: select)
+  tanggalMasuk DateTime @default(now())         // 🌟 Tambahkan ini (untuk type: date) - gunakan camelCase untuk best practice prisma
+  createdAt    DateTime @default(now())
 }
-
 model Customer {
   id Int @id @default(autoincrement())
   name      String
