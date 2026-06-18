@@ -1,4 +1,6 @@
 import prisma from '../../lib/prisma'
+import { userContextStorage } from '../../utils/context'
+import { createAuditLog } from '../../utils/audit';
 
 const PERMISSION = {
     create: true,
@@ -14,7 +16,7 @@ const SCHEMA = {
     permissions: PERMISSION,
     schema: [
         { key: 'id', label: 'Product ID', type: 'display', primary: true, readonly: true },
-        { key: 'name', label: 'Product Name', type: 'text' },
+        { key: 'name', label: 'Product Name', type: 'text', required: true },
         { key: 'price', label: 'Price', type: 'currency' }, // 🌟 Akan di-map ke 'decimal' di Vue loadComponentData
         { key: 'description', label: 'Description', type: 'textarea' },
         {
@@ -27,11 +29,16 @@ const SCHEMA = {
             ]
         },
         // 🌟 Sesuaikan key ke 'tanggalMasuk' agar match dengan properti database
-        { "key": "tanggalMasuk", "label": "Tanggal", "type": "date" }, 
+        { "key": "tanggalMasuk", "label": "Tanggal", "type": "date" },
     ],
     data: [] as any,
 };
 export const ProductService = {
+
+    _getCurrentUserEmail() {
+        const store = userContextStorage.getStore();
+        return store?.email || 'System/Unknown'; // Mengambil properti email dari CustomJwtPayload secara otomatis
+    },
 
     async getAll(where: any = {}) {
         const query = await prisma.product.findMany({
@@ -53,7 +60,7 @@ export const ProductService = {
     },
 
     async create() {
-        return await prisma.product.create({
+        const newData = await prisma.product.create({
             data: {
                 name: "New Product",
                 price: 0,
@@ -61,6 +68,16 @@ export const ProductService = {
                 tanggalMasuk: new Date()
             }
         });
+
+        await createAuditLog({
+            tableName: 'Product',
+            action: 'created',
+            user: this._getCurrentUserEmail(),
+            oldData: null,
+            newData: newData
+        });
+
+        return newData;
     },
 
     // 🌟 PASTIKAN METHOD INI ADA DI DALAM BLOK PRODUCTSERVICE
@@ -79,17 +96,18 @@ export const ProductService = {
     },
 
     async update(id: number, data: any) {
-        const updateData = { ...data };
-        if (updateData.price !== undefined) {
-            updateData.price = Number(updateData.price);
+        const oldData = await this.getById(id);
+        const newData = { ...data };
+        if (newData.price !== undefined) {
+            newData.price = Number(newData.price);
         }
-        if (updateData.tanggalMasuk) {
-            updateData.tanggalMasuk = new Date(updateData.tanggalMasuk);
+        if (newData.tanggalMasuk) {
+            newData.tanggalMasuk = new Date(newData.tanggalMasuk);
         }
 
-        return await prisma.product.update({
+        const updatedData = await prisma.product.update({
             where: { id: id },
-            data: updateData,
+            data: newData,
             select: {
                 id: true,
                 name: true,
@@ -99,11 +117,31 @@ export const ProductService = {
                 tanggalMasuk: true
             }
         });
+
+        await createAuditLog({
+            tableName: 'Product',
+            action: 'update',
+            user: this._getCurrentUserEmail(),
+            oldData: oldData,
+            newData: newData
+        });
+
+        return updatedData;
     },
 
     async delete(id: number) {
-        return await prisma.product.delete({
+        const oldData = await this.getById(id)
+        const deletedData = await prisma.product.delete({
             where: { id: id }
         });
+
+        await createAuditLog({
+            tableName: 'Product', // Sesuai nama skema atau SCHEMA.key
+            action: 'delete',
+            user: this._getCurrentUserEmail(),
+            oldData: oldData,
+            newData: null // Null karena datanya sudah tidak ada lagi setelah dihapus
+        });
+        return deletedData;
     }
 };

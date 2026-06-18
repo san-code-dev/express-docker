@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../utils/jwt"
 import { CustomJwtPayload } from "../utils/jwt";
+import { userContextStorage } from "../utils/context"; // 👈 Import storage baru
 
 export interface AuthenticatedRequest extends Request {
   user?: CustomJwtPayload;
@@ -20,7 +21,11 @@ const authMiddleware = (
   try {
     const decoded = verifyToken(token);
     req.user = decoded;
-    next();
+
+    userContextStorage.run(decoded, () => {
+      next();
+    });
+    
   } catch (error) {
     return res.status(401).json({ message: "Cookies ada tapi token tidak valid" });
   }

@@ -7,10 +7,10 @@ DEVELOPMENT
 
 cp .env.example .env
 npm install
-docker compose -f docker-compose.dev.yml up --build
+docker compose up --build -d
 </pre>
-note: prisma migrated automatically by docker compose, 
-execute npx prisma generate everytime change prisma scheme
+note: prisma migrated automatically by docker compose, by executing docker compose up --build -d
+execute npx prisma generate everytime change prisma scheme and docker compose up --build -d
 execute docker compose down -v everytime added new library
 
 

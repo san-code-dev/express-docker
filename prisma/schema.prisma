@@ -34,6 +34,18 @@ model Customer {
 }
 
 
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  tableName String   // Menyimpan info tabel, misal: 'Product'
+  action    String   // 'created' | 'update' | 'delete'
+  user      String   // Email atau ID User pelaku aksi
+  date      DateTime @default(now())
+  oldData   Json?    // Menyimpan state data sebelum diubah (null jika 'created')
+  newData   Json?    // Menyimpan state data sesudah diubah (null jika 'delete')
+
+  createdAt DateTime @default(now())
+}
+
 enum Role {
   SUPERADMIN
   ADMIN
