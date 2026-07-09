@@ -8,7 +8,7 @@ datasource db {
 }
 
 model User {
-  id Int @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   name      String
   email     String   @unique
   password  String
@@ -16,33 +16,111 @@ model User {
   createdAt DateTime @default(now())
 }
 
-model Product {
-  id           Int      @id @default(autoincrement())
-  name         String?
-  description  String?
-  price        Decimal  @default(0)
-  status       String   @default("active")      // 🌟 Tambahkan ini (untuk type: select)
-  tanggalMasuk DateTime @default(now())         // 🌟 Tambahkan ini (untuk type: date) - gunakan camelCase untuk best practice prisma
-  createdAt    DateTime @default(now())
-}
+// ==========================================
+// MASTER DATA MODUL
+// ==========================================
+
 model Customer {
-  id Int @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  phone     String?
-  createdAt DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  nmCustomer String
+  email      String   @unique
+  telepon    String?
+  alamat     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relasi balik: Satu customer bisa punya banyak transaksi penjualan
+  penjualan Penjualan[]
 }
 
+model Product {
+  id           Int               @id @default(autoincrement())
+  name         String
+  price        Decimal           @db.Decimal(15, 2) // Gunakan Decimal untuk financial/currency
+  stok         Int               @default(0)
+  description  String?           @db.Text
+  status       String            @default("active") // "active" | "inactive"
+  tanggalMasuk DateTime          @default(now())
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @default(now()) @updatedAt
+  // Relasi balik: Satu produk bisa terjual di banyak detail penjualan
+  jualDetails  PenjualanDetail[]
+}
+
+// ==========================================
+// TRANSACTION MODUL (HEADER & DETAIL)
+// ==========================================
+
+model Penjualan {
+  id         Int      @id @default(autoincrement())
+  noInvoice  String   @unique // Misal: INV-2026-0001
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  discount  Decimal  @default(0) @db.Decimal(15, 2)
+  total     Decimal  @db.Decimal(15, 2) // Total setelah diskon
+  createdBy String // Email user dari context token
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relasi: 1 Penjualan memiliki banyak Item Detail (1-to-many)
+  details PenjualanDetail[]
+}
+
+model PenjualanDetail {
+  id          Int       @id @default(autoincrement())
+  penjualanId Int
+  penjualan   Penjualan @relation(fields: [penjualanId], references: [id], onDelete: Cascade)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+
+  quantity Int
+  price    Decimal @db.Decimal(15, 2) // Harga saat transaksi terjadi (mengunci harga historis)
+  subTotal Decimal @db.Decimal(15, 2) // quantity * price
+}
+
+// ==========================================
+// GL & ACCOUNTING MODUL (Untuk Auto-Jurnal)
+// ==========================================
+
+model JurnalAkuntansi {
+  id         Int      @id @default(autoincrement())
+  noJurnal   String   @unique // Misal: JV-100234
+  tanggal    DateTime @default(now())
+  keterangan String   @db.Text
+  createdAt  DateTime @default(now())
+
+  // Relasi: 1 Jurnal memiliki minimal 2 baris (Debit & Kredit)
+  lineItems JurnalItem[]
+}
+
+model JurnalItem {
+  id              Int             @id @default(autoincrement())
+  jurnalId        Int
+  jurnalAkuntansi JurnalAkuntansi @relation(fields: [jurnalId], references: [id], onDelete: Cascade)
+
+  akunId  String // Misal: "1101" (Kas), "4101" (Pendapatan)
+  tipe    TipeJurnal // DEBIT atau KREDIT
+  nominal Decimal    @db.Decimal(15, 2)
+}
+
+enum TipeJurnal {
+  DEBIT
+  KREDIT
+}
+
+// ==========================================
+// AUDIT SYSTEM MODUL
+// ==========================================
 
 model AuditLog {
   id        Int      @id @default(autoincrement())
-  tableName String   // Menyimpan info tabel, misal: 'Product'
-  action    String   // 'created' | 'update' | 'delete'
-  user      String   // Email atau ID User pelaku aksi
-  date      DateTime @default(now())
-  oldData   Json?    // Menyimpan state data sebelum diubah (null jika 'created')
-  newData   Json?    // Menyimpan state data sesudah diubah (null jika 'delete')
-
+  tableName String // Nama tabel (Product, Penjualan, dll)
+  action    String // "created" | "update" | "delete"
+  user      String // Email operator/system
+  oldData   Json? // Snapshot data lama (sebelum diubah)
+  newData   Json? // Snapshot data baru (setelah diubah)
   createdAt DateTime @default(now())
 }
 

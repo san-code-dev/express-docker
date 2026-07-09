@@ -1,15 +1,15 @@
+// src/modules/auth/auth.controller.ts
 import { Request, Response } from "express";
 import { comparePassword } from "../../utils/bcrypt";
 import { signToken } from "../../utils/jwt";
 import prisma from "../../lib/prisma";
-import { AccessMenu } from "../../utils/mock-data";
+import { generateDynamicMenu } from "../../utils/menuGenerator"; // 🌟 Import helper baru
 
 const authController = {
   async login(req: Request, res: Response) {
     try {
       const { email, password } = req.body;
 
-      // Validasi input kosong
       if (!email || !password) {
         return res.status(400).json({ message: "Email dan password wajib diisi" });
       }
@@ -27,23 +27,25 @@ const authController = {
         return res.status(401).json({ message: "Email atau password salah" });
       }
 
-      // Pastikan payload sesuai dengan interface CustomJwtPayload
       const token = signToken({
         id: user.id,
         email: user.email,
-        role: user.role, // Enum Role dari Prisma otomatis terbaca sebagai string di sini
+        role: user.role,
       });
 
       res.cookie("access_token", token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production", // Otomatis true jika di production
+        secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 15 * 60 * 1000, // 15 Menit
       });
 
+      // 🔥 KUNCI PERBAIKAN: Generate menu secara dinamis dari Service yang terdaftar
+      const dynamicMenu = await generateDynamicMenu();
+
       return res.json({
         message: "Login berhasil",
-        menu: AccessMenu
+        menu: dynamicMenu // 🌟 Sekarang 100% dinamis mengikuti dynamic routes!
       });
       
     } catch (error) {
