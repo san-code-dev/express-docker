@@ -15,14 +15,14 @@ export const AuditLogController = {
 
             const logs = await prisma.auditLog.findMany({
                 where: whereCondition,
-                orderBy: { date: 'desc' }
+                orderBy: { createdAt: 'desc' }
             });
 
             const schemaFields = [
                 { key: 'id', label: 'Log ID', type: 'display', primary: true },
                 { key: 'action', label: 'Aksi', type: 'text' },
                 { key: 'user', label: 'Eksekutif (User)', type: 'text' },
-                { key: 'date', label: 'Waktu Kejadian', type: 'date' },
+                { key: 'createdAt', label: 'Waktu Kejadian', type: 'date' },
                 { key: 'oldData', label: 'Data Lama', type: 'json' },
                 { key: 'newData', label: 'Data Baru', type: 'json' }
             ];

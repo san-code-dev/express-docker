@@ -3,16 +3,32 @@ import prisma from '../lib/prisma';
 import { userContextStorage } from '../utils/context';
 import { createAuditLog } from '../utils/audit';
 
-export const SCHEMA = {
-  key: 'Penjualan',
+
+const _LOGED_USER = { // user yang login, ini hanya contoh, nanti bisa diambil dari context atau session
+  name: userContextStorage.getStore()?.email || 'System/Unknown',
+  permissions: {
+    penjualan: {
+      view: true,
+      create: true,
+      edit: false,
+      delete: false
+    }
+  }
+}
+
+export const SCHEMA = {   // tampilan ui from transaction yang ditampilkan dan json yang di kirim ke frontend
+  key: 'penjualan',
+  prefix: 'PJ',
   label: 'Transaksi Penjualan (POS)',
-  type: 'transaction' as const,
+  type: 'transaction',
   icon: 'iconify:mdi-cash-register',
-  permissions: { view: true, create: true, edit: false, delete: false },
+  permissions: _LOGED_USER.permissions['penjualan'],
+
   actions: [
     { key: 'print', label: 'Cetak Nota', type: 'printer' },
     { key: 'pay', label: 'Bayar Langsung', type: 'payment' },
   ],
+
   queue: {
     schema: [
       { key: 'id', label: 'ID Order', type: 'display', primary: true },
@@ -20,6 +36,7 @@ export const SCHEMA = {
     ],
     data: [] as any[]
   },
+
   header: {
     label: 'INFORMASI UTAMA NOTA',
     schema: [
@@ -36,6 +53,7 @@ export const SCHEMA = {
     ],
     data: {} as any
   },
+
   details: {
     label: 'DAFTAR BARANG BELANJA',
     schema: [
@@ -53,28 +71,48 @@ export const SCHEMA = {
   }
 };
 
-export const PenjualanService = {
-  _getCurrentUserEmail() {
-    return userContextStorage.getStore()?.email || 'System/Unknown';
-  },
 
-  async _generateInvoiceNumber(tx: any): Promise<string> {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export const PenjualanService = {
+
+
+
+
+  async _generateNewInvoiceNumber(tx: any): Promise<string> {
     const today = new Date();
     const yearMonth = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}`;
-    
-    const lastSale = await tx.penjualan.findFirst({
-      where: { noInvoice: { startsWith: `INV-${yearMonth}` } },
+
+    const lastInvoice = await tx[SCHEMA.key].findFirst({
+      where: { noInvoice: { startsWith: `${SCHEMA.prefix}-${yearMonth}` } },
       orderBy: { id: 'desc' }
     });
 
     let currentIncrement = 1;
-    if (lastSale) {
-      const lastInvoiceNum = lastSale.noInvoice.split('-')[2];
+    if (lastInvoice) {
+      const lastInvoiceNum = lastInvoice.noInvoice.split('-')[2];
       currentIncrement = parseInt(lastInvoiceNum, 10) + 1;
     }
 
-    return `INV-${yearMonth}-${String(currentIncrement).padStart(4, '0')}`;
+    return `${SCHEMA.prefix}-${yearMonth}-${String(currentIncrement).padStart(4, '0')}`;
   },
+
+
+
+
+
 
   async getAll(where: any = {}) {
     const transaksi = await prisma.penjualan.findMany({
@@ -84,18 +122,17 @@ export const PenjualanService = {
     });
 
     if (transaksi.length === 0) {
-      SCHEMA.queue.data = []; SCHEMA.header.data = {}; SCHEMA.details.data = [];
-      return SCHEMA;
+      await this.createNewTransaction();
+      return;
     }
 
     const activeTx = transaksi[0];
 
-    // ✅ FIX ERROR TS2339: Menggunakan nmCustomer, bukan name
-    SCHEMA.queue.data = transaksi.map(t => ({ 
-      id: t.id, 
-      customer: t.customer?.nmCustomer || 'Unknown' 
+    SCHEMA.queue.data = transaksi.map(t => ({
+      id: t.id,
+      customer: t.customer?.nmCustomer || 'Unknown'
     }));
-    
+
     SCHEMA.header.data = {
       id: activeTx.id,
       noInvoice: activeTx.noInvoice,
@@ -110,11 +147,51 @@ export const PenjualanService = {
       productId: d.productId,
       quantity: d.quantity,
       price: Number(d.price),
-      subTotal: Number(d.subTotal)
     }));
 
     return SCHEMA;
   },
+
+
+
+
+
+
+
+
+  async createNewTransaction() {
+    // Buat transaksi baru tanpa nomor invoice
+    const newTx = await prisma.penjualan.create({
+      // cast to any to satisfy varying prisma input requirements for a minimal draft transaction
+      data: ({
+        noInvoice: '',
+        discount: 0,
+        total: 0,
+        createdBy: _LOGED_USER.name,
+      } as any),
+    })
+
+    SCHEMA.queue.data = [{
+      id: newTx.id,
+      customer: 'Unknown'
+    }];
+
+    SCHEMA.header.data = {
+      id: newTx.id,
+      noInvoice: newTx.noInvoice,
+      date: newTx.createdAt.toISOString().split('T')[0],
+      customerId: newTx.customerId,
+      discount: Number(newTx.discount),
+      total: Number(newTx.total)
+    };
+
+    SCHEMA.details.data = [];
+    return SCHEMA;
+  },
+
+
+
+
 
   async getById(id: number) {
     return await prisma.penjualan.findUnique({
@@ -123,12 +200,28 @@ export const PenjualanService = {
     });
   },
 
-  async create(body: any) {
-    const { customerId, discount, items } = body; 
-    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  async save(body: any) {
+    const { customerId, discount, items } = body;
+
     if (!items || items.length === 0) throw new Error("Keranjang belanja tidak boleh kosong");
 
-    const currentUser = this._getCurrentUserEmail();
 
     const finalTransactionResult = await prisma.$transaction(async (tx) => {
       let grandSubTotal = 0;
@@ -151,7 +244,7 @@ export const PenjualanService = {
         detailPayloads.push({
           productId: item.productId,
           quantity: item.quantity,
-          price: product.price, 
+          price: product.price,
           subTotal: itemSubTotal
         });
       }
@@ -160,7 +253,7 @@ export const PenjualanService = {
       const netTotal = grandSubTotal - totalDiskon;
       if (netTotal < 0) throw new Error("Diskon tidak boleh melebihi nilai total belanja!");
 
-      const invoiceNo = await this._generateInvoiceNumber(tx);
+      const invoiceNo = await this._generateNewInvoiceNumber(tx);
 
       // ✅ FIX ERROR TS2322: noInvoice dipetakan langsung & customer menggunakan relasi connect berstandar Prisma
       const penjualan = await tx.penjualan.create({
@@ -168,7 +261,7 @@ export const PenjualanService = {
           noInvoice: invoiceNo,
           discount: totalDiskon,
           total: netTotal,
-          createdBy: currentUser,
+          createdBy: _LOGED_USER.name,
           customer: {
             connect: { id: Number(customerId) }
           },
@@ -185,15 +278,15 @@ export const PenjualanService = {
       });
 
       // Auto-Jurnal Akuntansi
-      const jurnalNo = `JV-${invoiceNo.replace('INV-', '')}`;
+      const jurnalNo = `JV-${invoiceNo.replace(`${SCHEMA.prefix}-`, '')}`;
       await tx.jurnalAkuntansi.create({
         data: {
           noJurnal: jurnalNo,
-          keterangan: `Penjualan Otomatis Invoice: ${invoiceNo} Kasir: ${currentUser}`,
+          keterangan: `Penjualan Otomatis Invoice: ${invoiceNo} Kasir: ${_LOGED_USER.name}`,
           lineItems: {
             create: [
-              { akunId: '1101', tipe: 'DEBIT', nominal: netTotal }, 
-              { akunId: '4101', tipe: 'KREDIT', nominal: netTotal } 
+              { akunId: '1101', tipe: 'DEBIT', nominal: netTotal },
+              { akunId: '4101', tipe: 'KREDIT', nominal: netTotal }
             ]
           }
         }
@@ -205,7 +298,6 @@ export const PenjualanService = {
     await createAuditLog({
       tableName: 'Penjualan',
       action: 'created',
-      user: currentUser,
       oldData: null,
       newData: finalTransactionResult
     });
@@ -213,11 +305,35 @@ export const PenjualanService = {
     return finalTransactionResult;
   },
 
+
+
+
+
+
+
+
+
+  async cancel(id: number) {
+    throw new Error("Nota penjualan tidak boleh dihapus demi integritas audit keuangan. Gunakan Pembatalan/Void!");
+  },
+
+
+
+
+
   async update(id: number, body: any) {
     throw new Error("Transaksi penjualan yang sudah sah tidak diizinkan untuk diubah secara langsung. Gunakan sistem Retur!");
   },
 
+
+
+
+
   async delete(id: number) {
     throw new Error("Nota penjualan tidak boleh dihapus demi integritas audit keuangan. Gunakan Pembatalan/Void!");
   }
+
+
+
+
 };

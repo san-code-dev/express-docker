@@ -1,6 +1,4 @@
-// src/services/product.service.ts
 import prisma from '../lib/prisma';
-import { userContextStorage } from '../utils/context';
 import { createAuditLog } from '../utils/audit';
 
 export const SCHEMA = {
@@ -30,10 +28,6 @@ export const SCHEMA = {
 };
 
 export const ProductService = {
-  _getCurrentUserEmail() {
-    return userContextStorage.getStore()?.email || 'System/Unknown';
-  },
-
   async getAll(where: any = {}) {
     const products = await prisma.product.findMany({
       where,
@@ -80,7 +74,6 @@ export const ProductService = {
     await createAuditLog({
       tableName: 'Product',
       action: 'created',
-      user: this._getCurrentUserEmail(),
       oldData: null,
       newData: product
     });
@@ -105,7 +98,6 @@ export const ProductService = {
     await createAuditLog({
       tableName: 'Product',
       action: 'update',
-      user: this._getCurrentUserEmail(),
       oldData,
       newData: updatedProduct
     });
@@ -122,7 +114,6 @@ export const ProductService = {
     await createAuditLog({
       tableName: 'Product',
       action: 'delete',
-      user: this._getCurrentUserEmail(),
       oldData,
       newData: null
     });

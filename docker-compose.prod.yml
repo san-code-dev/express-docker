@@ -1,0 +1,15 @@
+# Docker compose untuk client jadikan 1 folder dengan .env,image, dan docker-compose.prod.yml agar mudah diatur.
+services:
+  app:
+    image: nama-aplikasi-client:v1 # Menggunakan image hasil docker load
+    container_name: express-app-prod
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.production
+    restart: always # Otomatis menyala jika komputer client restart/mati lampu
+    command: >  
+      sh -c "
+        npx prisma db push && 
+        node dist/src/main.js
+      "

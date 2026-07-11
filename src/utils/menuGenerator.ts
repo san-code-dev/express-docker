@@ -14,14 +14,14 @@ export const generateDynamicMenu = async (): Promise<MenuItem[]> => {
     const menuList: MenuItem[] = [];
 
     // 1. Tambahkan menu statis inti (Dashboard)
-    menuList.push({
-        key: 'Dashboard',
-        icon: 'iconify:carbon:dashboard',
-        label: 'Dashboard ERP',
-        route: '/dashboard',
-        api: '/api/dashboard',
-        menuCategory: 'core',
-    });
+    // menuList.push({
+    //     key: 'Dashboard',
+    //     icon: 'iconify:carbon:dashboard',
+    //     label: 'Dashboard ERP',
+    //     route: '/dashboard',
+    //     api: '/api/dashboard',
+    //     menuCategory: 'core',
+    // });
 
     // 2. Loop secara instan dari registry terpusat
     for (const module of ModuleRegistry) {

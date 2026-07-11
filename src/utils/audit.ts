@@ -1,14 +1,16 @@
 import prisma from '../lib/prisma';
+import { userContextStorage } from '../utils/context';
 
 interface AuditPayload {
   tableName: string;
   action: 'created' | 'update' | 'delete';
-  user: string; // Diambil dari req.user.email saat controller memanggil service
   oldData?: any;
   newData?: any;
 }
 
-export const createAuditLog = async ({ tableName, action, user, oldData, newData }: AuditPayload) => {
+export const createAuditLog = async ({ tableName, action, oldData, newData }: AuditPayload) => {
+  const user = userContextStorage.getStore()?.email || 'System/Unknown';
+
   try {
     await prisma.auditLog.create({
       data: {
