@@ -5,12 +5,10 @@ import { SCHEMA as PenjualanSchema, PenjualanService } from './penjualan.service
 // Daftar modul yang aktif di aplikasi Anda
 export const ModuleRegistry = [
   {
-    name: 'product',
     schema: ProductSchema,
     service: ProductService
   },
   {
-    name: 'penjualan',
     schema: PenjualanSchema,
     service: PenjualanService
   }

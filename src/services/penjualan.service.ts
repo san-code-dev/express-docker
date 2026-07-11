@@ -1,42 +1,34 @@
 // src/services/penjualan.service.ts
 import prisma from '../lib/prisma';
 import { userContextStorage } from '../utils/context';
-import { createAuditLog } from '../utils/audit';
+import { TransactionSchema, TransactionService } from '../interface/base.interface';
 
-
-const _LOGED_USER = { // user yang login, ini hanya contoh, nanti bisa diambil dari context atau session
+const _LOGED_USER = {
   name: userContextStorage.getStore()?.email || 'System/Unknown',
   permissions: {
-    penjualan: {
-      view: true,
-      create: true,
-      edit: false,
-      delete: false
-    }
+    penjualan: { view: true, create: true, edit: false, delete: false }
   }
-}
+};
 
-export const SCHEMA = {   // tampilan ui from transaction yang ditampilkan dan json yang di kirim ke frontend
+export const SCHEMA: TransactionSchema = {
   key: 'penjualan',
   prefix: 'PJ',
   label: 'Transaksi Penjualan (POS)',
   type: 'transaction',
   icon: 'iconify:mdi-cash-register',
   permissions: _LOGED_USER.permissions['penjualan'],
-
   actions: [
     { key: 'print', label: 'Cetak Nota', type: 'printer' },
     { key: 'pay', label: 'Bayar Langsung', type: 'payment' },
   ],
-
   queue: {
+    label: 'ANTRIAN TRANSAKSI',
     schema: [
       { key: 'id', label: 'ID Order', type: 'display', primary: true },
       { key: 'customer', label: 'Pelanggan', type: 'text' },
     ],
     data: [] as any[]
   },
-
   header: {
     label: 'INFORMASI UTAMA NOTA',
     schema: [
@@ -53,7 +45,6 @@ export const SCHEMA = {   // tampilan ui from transaction yang ditampilkan dan j
     ],
     data: {} as any
   },
-
   details: {
     label: 'DAFTAR BARANG BELANJA',
     schema: [
@@ -71,110 +62,34 @@ export const SCHEMA = {   // tampilan ui from transaction yang ditampilkan dan j
   }
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-export const PenjualanService = {
-
-
-
-
-  async _generateNewInvoiceNumber(tx: any): Promise<string> {
-    const today = new Date();
-    const yearMonth = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}`;
-
-    const lastInvoice = await tx[SCHEMA.key].findFirst({
-      where: { noInvoice: { startsWith: `${SCHEMA.prefix}-${yearMonth}` } },
-      orderBy: { id: 'desc' }
-    });
-
-    let currentIncrement = 1;
-    if (lastInvoice) {
-      const lastInvoiceNum = lastInvoice.noInvoice.split('-')[2];
-      currentIncrement = parseInt(lastInvoiceNum, 10) + 1;
-    }
-
-    return `${SCHEMA.prefix}-${yearMonth}-${String(currentIncrement).padStart(4, '0')}`;
-  },
-
-
-
-
-
-
-  async getAll(where: any = {}) {
-    const transaksi = await prisma.penjualan.findMany({
-      where,
-      include: { customer: true, details: { include: { product: true } } },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    if (transaksi.length === 0) {
-      await this.createNewTransaction();
-      return;
-    }
-
-    const activeTx = transaksi[0];
-
-    SCHEMA.queue.data = transaksi.map(t => ({
-      id: t.id,
-      customer: t.customer?.nmCustomer || 'Unknown'
-    }));
-
-    SCHEMA.header.data = {
-      id: activeTx.id,
-      noInvoice: activeTx.noInvoice,
-      date: activeTx.createdAt.toISOString().split('T')[0],
-      customerId: activeTx.customerId,
-      discount: Number(activeTx.discount),
-      total: Number(activeTx.total)
-    };
-
-    SCHEMA.details.data = activeTx.details.map(d => ({
-      id: d.id,
-      productId: d.productId,
-      quantity: d.quantity,
-      price: Number(d.price),
-    }));
-
+export const PenjualanService: TransactionService = {
+  getModuleSchema: function (): TransactionSchema {
     return SCHEMA;
   },
 
+  getQueue: async (): Promise<any> => {
+    const queueData = await prisma.penjualan.findMany({
+      include: { customer: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    SCHEMA.queue.data = queueData.map(q => ({
+      id: q.id,
+      customer: q.customer?.nmCustomer || 'Unknown / General Customer'
+    }));
 
+    return SCHEMA.queue.data;
+  },
 
-
-
-
-
-
-  async createNewTransaction() {
-    // Buat transaksi baru tanpa nomor invoice
+  newTransaction: async (data?: any): Promise<any> => {
     const newTx = await prisma.penjualan.create({
-      // cast to any to satisfy varying prisma input requirements for a minimal draft transaction
-      data: ({
-        noInvoice: '',
+      data: {
+        noInvoice: `DRAFT-${Date.now()}`, // Template invoice sementara sebelum checkout final
         discount: 0,
         total: 0,
         createdBy: _LOGED_USER.name,
-      } as any),
-    })
-
-    SCHEMA.queue.data = [{
-      id: newTx.id,
-      customer: 'Unknown'
-    }];
+      },
+    });
 
     SCHEMA.header.data = {
       id: newTx.id,
@@ -184,156 +99,141 @@ export const PenjualanService = {
       discount: Number(newTx.discount),
       total: Number(newTx.total)
     };
-
     SCHEMA.details.data = [];
+
     return SCHEMA;
   },
 
-
-
-
-
-  async getById(id: number) {
-    return await prisma.penjualan.findUnique({
+  getTransaction: async (id: number): Promise<any> => {
+    const transaction = await prisma.penjualan.findUnique({
       where: { id },
-      include: { details: true }
-    });
-  },
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  async save(body: any) {
-    const { customerId, discount, items } = body;
-
-    if (!items || items.length === 0) throw new Error("Keranjang belanja tidak boleh kosong");
-
-
-    const finalTransactionResult = await prisma.$transaction(async (tx) => {
-      let grandSubTotal = 0;
-      const detailPayloads = [];
-
-      for (const item of items) {
-        const product = await tx.product.findUnique({ where: { id: item.productId } });
-        if (!product) throw new Error(`Produk dengan ID ${item.productId} tidak terdaftar.`);
-        if (product.status !== 'active') throw new Error(`Produk ${product.name} sedang tidak aktif.`);
-        if (product.stok < item.quantity) throw new Error(`Stok "${product.name}" kurang. Sisa: ${product.stok}`);
-
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stok: { decrement: item.quantity } }
-        });
-
-        const itemSubTotal = Number(product.price) * item.quantity;
-        grandSubTotal += itemSubTotal;
-
-        detailPayloads.push({
-          productId: item.productId,
-          quantity: item.quantity,
-          price: product.price,
-          subTotal: itemSubTotal
-        });
+      include: {
+        customer: true,
+        details: { include: { product: true } }
       }
-
-      const totalDiskon = discount ? Number(discount) : 0;
-      const netTotal = grandSubTotal - totalDiskon;
-      if (netTotal < 0) throw new Error("Diskon tidak boleh melebihi nilai total belanja!");
-
-      const invoiceNo = await this._generateNewInvoiceNumber(tx);
-
-      // ✅ FIX ERROR TS2322: noInvoice dipetakan langsung & customer menggunakan relasi connect berstandar Prisma
-      const penjualan = await tx.penjualan.create({
-        data: {
-          noInvoice: invoiceNo,
-          discount: totalDiskon,
-          total: netTotal,
-          createdBy: _LOGED_USER.name,
-          customer: {
-            connect: { id: Number(customerId) }
-          },
-          details: {
-            create: detailPayloads.map(d => ({
-              productId: d.productId,
-              quantity: d.quantity,
-              price: d.price,
-              subTotal: d.subTotal
-            }))
-          }
-        },
-        include: { details: true }
-      });
-
-      // Auto-Jurnal Akuntansi
-      const jurnalNo = `JV-${invoiceNo.replace(`${SCHEMA.prefix}-`, '')}`;
-      await tx.jurnalAkuntansi.create({
-        data: {
-          noJurnal: jurnalNo,
-          keterangan: `Penjualan Otomatis Invoice: ${invoiceNo} Kasir: ${_LOGED_USER.name}`,
-          lineItems: {
-            create: [
-              { akunId: '1101', tipe: 'DEBIT', nominal: netTotal },
-              { akunId: '4101', tipe: 'KREDIT', nominal: netTotal }
-            ]
-          }
-        }
-      });
-
-      return penjualan;
     });
 
-    await createAuditLog({
-      tableName: 'Penjualan',
-      action: 'created',
-      oldData: null,
-      newData: finalTransactionResult
+    if (!transaction) throw new Error('Transaksi tidak ditemukan');
+
+    SCHEMA.header.data = {
+      id: transaction.id,
+      noInvoice: transaction.noInvoice,
+      date: transaction.createdAt.toISOString().split('T')[0],
+      customerId: transaction.customerId,
+      discount: Number(transaction.discount),
+      total: Number(transaction.total)
+    };
+
+    SCHEMA.details.data = transaction.details.map(d => ({
+      id: d.id,
+      productId: d.productId,
+      quantity: d.quantity,
+      price: Number(d.price),
+      subTotal: d.quantity * Number(d.price) // Kalkulasi runtime virtual subtotal untuk UI Frontend
+    }));
+
+    return SCHEMA;
+  },
+
+  updateHeader: async (id: number, data: any): Promise<any> => {
+    const updated = await prisma.penjualan.update({
+      where: { id },
+      data: {
+        customerId: data.customerId ? Number(data.customerId) : undefined,
+        discount: data.discount !== undefined ? Number(data.discount) : undefined,
+      }
+    });
+    
+    // Recalculate total invoice jika diskon berubah
+    return PenjualanService.getTransaction(id);
+  },
+
+  getDetails: async (headerId: number): Promise<any> => {
+    const res = await PenjualanService.getTransaction(headerId);
+    return res.details.data;
+  },
+
+  addDetails: async (headerId: number, data: any): Promise<any> => {
+    // 1. Ambil data harga asli produk dari master product
+    const product = await prisma.product.findUnique({ where: { id: Number(data.productId) } });
+    if (!product) throw new Error('Produk tidak ditemukan');
+
+    // 2. Tambahkan detail item baru
+    await prisma.penjualanDetail.create({
+      data: {
+        penjualanId: headerId,
+        productId: Number(data.productId),
+        quantity: Number(data.quantity),
+        price: product.price
+      }
     });
 
-    return finalTransactionResult;
+    // 3. Update summary total di header penjualan
+    await syncInvoiceTotal(headerId);
+
+    return PenjualanService.getTransaction(headerId);
   },
 
+  updateDetails: async (headerId: number, id: number, data: any): Promise<any> => {
+    await prisma.penjualanDetail.update({
+      where: { id },
+      data: {
+        quantity: data.quantity ? Number(data.quantity) : undefined
+      }
+    });
 
-
-
-
-
-
-
-
-  async cancel(id: number) {
-    throw new Error("Nota penjualan tidak boleh dihapus demi integritas audit keuangan. Gunakan Pembatalan/Void!");
+    await syncInvoiceTotal(headerId);
+    return PenjualanService.getTransaction(headerId);
   },
 
-
-
-
-
-  async update(id: number, body: any) {
-    throw new Error("Transaksi penjualan yang sudah sah tidak diizinkan untuk diubah secara langsung. Gunakan sistem Retur!");
+  deleteDetails: async (headerId: number, id: number): Promise<any> => {
+    await prisma.penjualanDetail.delete({ where: { id } });
+    
+    await syncInvoiceTotal(headerId);
+    return PenjualanService.getTransaction(headerId);
   },
 
+  cancelTransaction: async (id: number, data: any): Promise<any> => {
+    // Hapus total invoice beserta detailnya (Cascade delete aktif dari Prisma Schema)
+    await prisma.penjualan.delete({ where: { id } });
+    return { success: true, message: `Transaksi ID ${id} berhasil dibatalkan` };
+  },
 
+  saveTransaction: async (id: number, data: any): Promise<any> => {
+    // Mengubah nomor invoice draft menjadi invoice resmi POS ter-urut
+    const count = await prisma.penjualan.count();
+    const finalInvoiceNo = `PJ-${String(count + 1).padStart(5, '0')}`;
 
+    await prisma.penjualan.update({
+      where: { id },
+      data: { noInvoice: finalInvoiceNo }
+    });
 
-
-  async delete(id: number) {
-    throw new Error("Nota penjualan tidak boleh dihapus demi integritas audit keuangan. Gunakan Pembatalan/Void!");
+    return PenjualanService.getTransaction(id);
   }
-
-
-
-
 };
+
+// ====================================================================
+// REUSABLE HELPER: Sinkronisasi Total Belanja setelah mutasi detail item
+// ====================================================================
+async function syncInvoiceTotal(penjualanId: number) {
+  const tx = await prisma.penjualan.findUnique({
+    where: { id: penjualanId },
+    include: { details: true }
+  });
+
+  if (!tx) return;
+
+  // Hitung total kotor dari total seluruh item detail
+  const grossTotal = tx.details.reduce((sum, item) => {
+    return sum + (item.quantity * Number(item.price));
+  }, 0);
+
+  // Kurangi diskon untuk mendapatkan total bersih
+  const netTotal = Math.max(0, grossTotal - Number(tx.discount));
+
+  await prisma.penjualan.update({
+    where: { id: penjualanId },
+    data: { total: netTotal }
+  });
+}

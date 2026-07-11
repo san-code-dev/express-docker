@@ -32,8 +32,8 @@ export const generateDynamicMenu = async (): Promise<MenuItem[]> => {
                 key: schema.key,
                 icon: schema.icon || 'iconify:carbon:box', // Pakai fallback icon jika kosong
                 label: schema.label || `Data ${schema.key}`,
-                route: `/${module.name}`,
-                api: `/api/${module.name}`,
+                route: `/${schema.key.toLowerCase()}`,
+                api: `/api/${schema.key.toLowerCase()}`,
                 menuCategory: schema.type || 'master',
             });
         }

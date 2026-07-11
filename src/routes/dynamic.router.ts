@@ -2,23 +2,23 @@
 import { Router } from 'express';
 import authMiddleware from '../middlewares/auth.middleware';
 import { handleDynamicRequest } from '../controllers/dynamic.controller';
-import { ModuleRegistry } from '../services/index'; // 🌟 Import registry terpusat
 
 const router = Router();
 
 export const initDynamicRoutes = (): Router => {
-  for (const module of ModuleRegistry) {
-    const ctrl = handleDynamicRequest(module.service);
-    const endpoint = `/${module.name}`; // Menghasilkan: /product dan /penjualan
+  const ctrl = handleDynamicRequest();
 
-    // Registrasi HTTP Method secara aman & pasang Auth Middleware
-    router.get(endpoint, authMiddleware, ctrl.getAll);
-    router.get(`${endpoint}/:id`, authMiddleware, ctrl.getById);
-    router.post(endpoint, authMiddleware, ctrl.create);
-    router.put(`${endpoint}/:id`, authMiddleware, ctrl.update);
-    router.delete(`${endpoint}/:id`, authMiddleware, ctrl.delete);
-    
-    console.log(`📡 Route Registered: /api${endpoint}`);
-  }
+  // Pola URL dinamis berjenjang
+  const baseRoute = '/:form_key';
+  const headerRoute = '/:form_key/:header_key';
+  const detailsRoute = '/:form_key/:header_key/:details_key';
+
+  const routePatterns = [detailsRoute, headerRoute, baseRoute];
+
+  router.get(routePatterns, authMiddleware, ctrl.handleGet);
+  router.post(routePatterns, authMiddleware, ctrl.handlePost);
+  router.put(routePatterns, authMiddleware, ctrl.handlePut);
+  router.delete(routePatterns, authMiddleware, ctrl.handleDelete);
+
   return router;
 };
