@@ -5,6 +5,7 @@ export interface MenuItem {
     key: string;
     icon: string;
     label: string;
+    type:string;
     route: string;
     api: string;
     menuCategory: string;
@@ -32,6 +33,7 @@ export const generateDynamicMenu = async (): Promise<MenuItem[]> => {
                 key: schema.key,
                 icon: schema.icon || 'iconify:carbon:box', // Pakai fallback icon jika kosong
                 label: schema.label || `Data ${schema.key}`,
+                type:schema.type,
                 route: `/${schema.key.toLowerCase()}`,
                 api: `/api/${schema.key.toLowerCase()}`,
                 menuCategory: schema.type || 'master',

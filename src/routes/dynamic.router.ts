@@ -8,17 +8,9 @@ const router = Router();
 export const initDynamicRoutes = (): Router => {
   const ctrl = handleDynamicRequest();
 
-  // Pola URL dinamis berjenjang
-  const baseRoute = '/:form_key';
-  const headerRoute = '/:form_key/:header_key';
-  const detailsRoute = '/:form_key/:header_key/:details_key';
-
-  const routePatterns = [detailsRoute, headerRoute, baseRoute];
-
-  router.get(routePatterns, authMiddleware, ctrl.handleGet);
-  router.post(routePatterns, authMiddleware, ctrl.handlePost);
-  router.put(routePatterns, authMiddleware, ctrl.handlePut);
-  router.delete(routePatterns, authMiddleware, ctrl.handleDelete);
+  // Pola URL Baru: /api/:form_key/:action
+  // Contoh: /api/penjualan/add-details?header_key=10
+  router.all('/:form_key/:action', authMiddleware, ctrl.handleRequest);
 
   return router;
 };

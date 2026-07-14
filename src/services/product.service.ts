@@ -1,7 +1,7 @@
 import { MasterSchema } from '../interface/base.interface';
 import prisma from '../lib/prisma';
 import { createAuditLog } from '../utils/audit';
-
+import { parseFilterToPrisma } from '../utils/prismaFilterParser'
 export const SCHEMA: MasterSchema = {
   key: 'Product',
   label: 'Data Product',
@@ -33,11 +33,11 @@ export const ProductService = {
   async getModuleSchema() {
     return SCHEMA;
   },
-  
+
 
   async getAll(where: any = {}) {
     const products = await prisma.product.findMany({
-      where,
+      ...(parseFilterToPrisma(where)),
       orderBy: { createdAt: 'asc' }
     });
 

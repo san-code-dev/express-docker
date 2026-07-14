@@ -3,6 +3,17 @@
  * menjadi objek "Where Input" yang valid untuk Prisma.
  */
 export function parseFilterToPrisma(whereQuery: any): Record<string, any> {
+
+
+  // Karena dikirim via JSON.stringify dari frontend, kita perlu parse kembali di sini
+  if (typeof whereQuery === 'string') {
+    try {
+      whereQuery = JSON.parse(whereQuery);
+    } catch (e) {
+       console.log(`Invalid JSON in 'where' query parameter` );
+    }
+  }
+
   // 1. Jika kosong atau tidak ada filter
   if (!whereQuery) return {};
 
@@ -23,7 +34,7 @@ export function parseFilterToPrisma(whereQuery: any): Record<string, any> {
     // 🟢 PERBAIKAN: Tentukan kolom mana saja yang PASTI bertipe STRING di database Anda
     // Tambahkan nama kolom lain milik Anda di sini jika ada (misal: 'sku', 'barcode', 'category')
     const stringFields = ['name', 'description', 'code', 'note', 'remarks', 'status'];
-    
+
     // Anggap kolom bernilai angka jika dia kolom 'id' atau nama kolomnya TIDAK terdaftar di stringFields
     // DAN isi value-nya memang valid berupa angka.
     const isNumberField = field === 'id' || (!stringFields.includes(field.toLowerCase()) && !isNaN(Number(value)));
