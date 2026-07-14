@@ -7,7 +7,7 @@ services:
       - "3000:3000"
     env_file:
       - .env.production
-    restart: always # Otomatis menyala jika komputer client restart/mati lampu
+    restart: unless-stopped # Otomatis menyala jika komputer client restart/mati lampu, tapi ga akan menyala kembali setelah dimatikan manual dan harus dijalankan manual
     command: >  
       sh -c "
         npx prisma db push && 

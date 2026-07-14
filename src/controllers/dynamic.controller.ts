@@ -87,8 +87,8 @@ export const handleDynamicRequest = () => {
 
           // Pola 1: /penjualan
           if (form_key && !header_key && !details_key) {
-            const queue = await service.getQueue();
-            return res.json(queue);
+              const transaction = await service.getLastTransaction()
+              return res.json(transaction);
           }
         }
 

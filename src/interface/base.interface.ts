@@ -25,21 +25,27 @@ export interface TransactionSchema {
 export interface MasterService {
   getModuleSchema(): MasterSchema;
   getAll(where?: any): Promise<any>;
-  create(data?: any): Promise<any>;
-  update(id: number, data: any): Promise<any>;
+  create(body?: any): Promise<any>;
+  update(id: number, body: any): Promise<any>;
   delete(id: number): Promise<any>;
 }
 
 export interface TransactionService {
   getModuleSchema(): TransactionSchema;
   getQueue(): Promise<any>;
-  newTransaction(data?: any): Promise<any>;
+  getHeader(): Promise<any>;
+  getDetails(id: number): Promise<any>;
+
+
+
+  newTransaction(body?: any): Promise<any>;
   getTransaction(id: number): Promise<any>;
-  cancelTransaction(id: number, data: any): Promise<any>;
-  saveTransaction(id: number, data: any): Promise<any>;
-  updateHeader(id: number, data: any): Promise<any>;
+  getLastTransaction(): Promise <any>;
+  cancelTransaction(id: number, body: any): Promise<any>;
+  saveTransaction(id: number, body: any): Promise<any>;
+  updateHeader(id: number, body: any): Promise<any>;
   getDetails(headerId: number): Promise<any>;
-  addDetails(headerId: number, data: any): Promise<any>;
-  updateDetails(headerId: number, id: number, data: any): Promise<any>;
+  addDetails(headerId: number, body: any): Promise<any>;
+  updateDetails(headerId: number, id: number, body: any): Promise<any>;
   deleteDetails(headerId: number, id: number): Promise<any>;
 }

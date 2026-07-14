@@ -2,6 +2,7 @@
 import prisma from '../lib/prisma';
 import { userContextStorage } from '../utils/context';
 import { TransactionSchema, TransactionService } from '../interface/base.interface';
+import { generateNewInvoiceNumber } from '../utils/erpUtils';
 
 const _LOGED_USER = {
   name: userContextStorage.getStore()?.email || 'System/Unknown',
@@ -48,7 +49,7 @@ export const SCHEMA: TransactionSchema = {
   details: {
     label: 'DAFTAR BARANG BELANJA',
     schema: [
-      { key: 'id', label: 'ID', type: 'display', primary: true, readonly: true },
+      { key: 'name', label: 'Nama', type: 'display', primary: true, readonly: true },
       {
         key: 'productId', label: 'Pilih Produk', type: 'relation', relation: {
           entity: 'product', valueField: 'id', displayField: 'name', api: '/api/product',
@@ -56,7 +57,7 @@ export const SCHEMA: TransactionSchema = {
       },
       { key: 'quantity', label: 'Qty', type: 'number', validation: { required: true, min: 1 } },
       { key: 'price', label: 'Harga Satuan', type: 'currency', readonly: true },
-      { key: 'subTotal', label: 'Subtotal', type: 'currency', readonly: true },
+      { key: 'subtotal', label: 'Subtotal', readonly: true, type: 'computed', formula: '{quantity} * {price}' }
     ],
     data: [] as any[]
   }
@@ -67,24 +68,50 @@ export const PenjualanService: TransactionService = {
     return SCHEMA;
   },
 
-  getQueue: async (): Promise<any> => {
-    const queueData = await prisma.penjualan.findMany({
-      include: { customer: true },
-      orderBy: { createdAt: 'desc' }
+  getQueue: async (): Promise<typeof SCHEMA.queue.data> => {
+    const activeTransactions = await prisma.penjualan.findMany({
+      // where: { 
+      //   // Sesuaikan kondisi antrian Anda, misal status belum final/belum dibayar
+      //   isFinalSubmit: false 
+      // },
+      include: {
+        customer: true // jika antrian butuh nama customer
+      },
+      orderBy: { id: 'desc' }
     });
-    
-    SCHEMA.queue.data = queueData.map(q => ({
-      id: q.id,
-      customer: q.customer?.nmCustomer || 'Unknown / General Customer'
-    }));
 
-    return SCHEMA.queue.data;
+
+    const data = activeTransactions.map(t => ({
+      id: t.id,
+      customer: t.customer?.nmCustomer || ''
+    }))
+    return data
+  },
+
+  // Implementasi wajib dari TransactionService interface
+  getHeader: async (): Promise<any> => {
+    return SCHEMA.header.data;
+  },
+
+  // Implementasi wajib dari TransactionService interface dengan 1 parameter (id)
+  // Menampilkan data detail ter-format dari cache SCHEMA internal
+  getDetails: async (headerId: number): Promise<any> => {
+    return SCHEMA.details.data;
+  },
+
+  getLastTransaction: async (): Promise<any> => {
+    const queue = await PenjualanService.getQueue(); // FIX: Tambahkan await di sini
+    if (queue && queue.length > 0) {
+      return PenjualanService.getTransaction(queue[0].id); // Ambil transaksi pertama dari queue terbaru
+    } else {
+      return PenjualanService.newTransaction();
+    }
   },
 
   newTransaction: async (data?: any): Promise<any> => {
     const newTx = await prisma.penjualan.create({
       data: {
-        noInvoice: `DRAFT-${Date.now()}`, // Template invoice sementara sebelum checkout final
+        noInvoice: `DRAFT-${Date.now()}`,
         discount: 0,
         total: 0,
         createdBy: _LOGED_USER.name,
@@ -105,15 +132,17 @@ export const PenjualanService: TransactionService = {
   },
 
   getTransaction: async (id: number): Promise<any> => {
+    const queue = await PenjualanService.getQueue();
     const transaction = await prisma.penjualan.findUnique({
-      where: { id },
+      where: { id: Number(id) },
       include: {
         customer: true,
         details: { include: { product: true } }
       }
     });
 
-    if (!transaction) throw new Error('Transaksi tidak ditemukan');
+    if (!transaction) throw new Error('Transaction tidak ditemukan');
+    SCHEMA.queue.data=queue;
 
     SCHEMA.header.data = {
       id: transaction.id,
@@ -126,96 +155,99 @@ export const PenjualanService: TransactionService = {
 
     SCHEMA.details.data = transaction.details.map(d => ({
       id: d.id,
+      name: d.product.name,
       productId: d.productId,
       quantity: d.quantity,
       price: Number(d.price),
-      subTotal: d.quantity * Number(d.price) // Kalkulasi runtime virtual subtotal untuk UI Frontend
+      subTotal: d.quantity * Number(d.price)
     }));
 
     return SCHEMA;
   },
 
-  updateHeader: async (id: number, data: any): Promise<any> => {
-    const updated = await prisma.penjualan.update({
-      where: { id },
+  updateHeader: async (id: number, body: any): Promise<any> => {
+    await prisma.penjualan.update({
+      where: { id: Number(id) },
       data: {
-        customerId: data.customerId ? Number(data.customerId) : undefined,
-        discount: data.discount !== undefined ? Number(data.discount) : undefined,
+        customerId: body.customerId ? Number(body.customerId) : null,
+        discount: body.discount !== undefined ? Number(body.discount) : undefined,
       }
     });
-    
-    // Recalculate total invoice jika diskon berubah
-    return PenjualanService.getTransaction(id);
+
+    // Sinkronisasi ulang total bersih (karena diskon mungkin berubah)
+    await syncInvoiceTotal(Number(id));
+
+    return PenjualanService.getTransaction(Number(id));
   },
 
-  getDetails: async (headerId: number): Promise<any> => {
-    const res = await PenjualanService.getTransaction(headerId);
-    return res.details.data;
-  },
+  addDetails: async (headerId: number, body: any): Promise<any> => {
+    const product = await prisma.product.findFirst({
+      where: {
+        id: Number(body.query),
+      }
+    });
 
-  addDetails: async (headerId: number, data: any): Promise<any> => {
-    // 1. Ambil data harga asli produk dari master product
-    const product = await prisma.product.findUnique({ where: { id: Number(data.productId) } });
     if (!product) throw new Error('Produk tidak ditemukan');
 
-    // 2. Tambahkan detail item baru
     await prisma.penjualanDetail.create({
       data: {
-        penjualanId: headerId,
-        productId: Number(data.productId),
-        quantity: Number(data.quantity),
-        price: product.price
+        quantity: 1,
+        price: product.price,
+        // Hubungkan relasi ke Product menggunakan nested relation connect
+        product: {
+          connect: { id: Number(product.id) }
+        },
+        // Hubungkan relasi ke Penjualan menggunakan nested relation connect
+        penjualan: {
+          connect: { id: Number(headerId) }
+        }
       }
     });
+    await syncInvoiceTotal(Number(headerId));
 
-    // 3. Update summary total di header penjualan
-    await syncInvoiceTotal(headerId);
-
-    return PenjualanService.getTransaction(headerId);
+    return PenjualanService.getTransaction(Number(headerId));
   },
 
-  updateDetails: async (headerId: number, id: number, data: any): Promise<any> => {
+  async updateDetails(headerId: number, detailsId: number, body: any) {
+    // Ambil payload dinamis yang dikirim frontend
+    // data akan berisi objek seperti { quantity: 5 } atau { discount: 10000 }
+
     await prisma.penjualanDetail.update({
-      where: { id },
-      data: {
-        quantity: data.quantity ? Number(data.quantity) : undefined
-      }
+      where: {
+        id: Number(detailsId), // Tetap gunakan detailsId dari parameter URL untuk mencari barisnya
+      },
+      data: body, // Dilempar langsung secara dinamis ke Prisma
     });
 
-    await syncInvoiceTotal(headerId);
-    return PenjualanService.getTransaction(headerId);
+    // Urusan subtotal dll nanti akan otomatis terhitung via computed/extension layer Prisma
+    // saat kita memanggil getTransaction(headerId) di bawah ini:
+    return this.getTransaction(headerId);
   },
 
   deleteDetails: async (headerId: number, id: number): Promise<any> => {
-    await prisma.penjualanDetail.delete({ where: { id } });
-    
-    await syncInvoiceTotal(headerId);
-    return PenjualanService.getTransaction(headerId);
+    await prisma.penjualanDetail.delete({ where: { id: Number(id) } });
+
+    await syncInvoiceTotal(Number(headerId));
+    return PenjualanService.getTransaction(Number(headerId));
   },
 
-  cancelTransaction: async (id: number, data: any): Promise<any> => {
-    // Hapus total invoice beserta detailnya (Cascade delete aktif dari Prisma Schema)
-    await prisma.penjualan.delete({ where: { id } });
+  cancelTransaction: async (id: number, body: any): Promise<any> => {
+    await prisma.penjualan.delete({ where: { id: Number(id) } });
     return { success: true, message: `Transaksi ID ${id} berhasil dibatalkan` };
   },
 
-  saveTransaction: async (id: number, data: any): Promise<any> => {
-    // Mengubah nomor invoice draft menjadi invoice resmi POS ter-urut
-    const count = await prisma.penjualan.count();
-    const finalInvoiceNo = `PJ-${String(count + 1).padStart(5, '0')}`;
+  saveTransaction: async (id: number, body: any): Promise<any> => {
+    const finalInvoiceNo = await generateNewInvoiceNumber(SCHEMA);
 
     await prisma.penjualan.update({
-      where: { id },
+      where: { id: Number(id) },
       data: { noInvoice: finalInvoiceNo }
     });
 
-    return PenjualanService.getTransaction(id);
+    return PenjualanService.getTransaction(Number(id));
   }
 };
 
-// ====================================================================
-// REUSABLE HELPER: Sinkronisasi Total Belanja setelah mutasi detail item
-// ====================================================================
 async function syncInvoiceTotal(penjualanId: number) {
   const tx = await prisma.penjualan.findUnique({
     where: { id: penjualanId },
@@ -224,12 +256,10 @@ async function syncInvoiceTotal(penjualanId: number) {
 
   if (!tx) return;
 
-  // Hitung total kotor dari total seluruh item detail
   const grossTotal = tx.details.reduce((sum, item) => {
     return sum + (item.quantity * Number(item.price));
   }, 0);
 
-  // Kurangi diskon untuk mendapatkan total bersih
   const netTotal = Math.max(0, grossTotal - Number(tx.discount));
 
   await prisma.penjualan.update({
