@@ -2,64 +2,54 @@
 import { Request, Response, NextFunction } from 'express';
 import { ModuleRegistry } from '../services/index';
 
-// Helper untuk mencari modul berdasarkan key (case-insensitive)
 const getModuleByKey = (key: string) => {
   return ModuleRegistry.find(m => m.schema.key.toLowerCase() === key.toLowerCase());
-};
-
-// Helper untuk mengubah string/number query params menjadi tipe data asli
-const parseArgs = (query: Record<string, any>): any[] => {
-  return Object.values(query).map(val => (isNaN(Number(val)) ? val : Number(val)));
 };
 
 export const handleDynamicRequest = () => {
   return {
     handleRequest: async (req: Request, res: Response, next: NextFunction): Promise<any> => {
-      const { form_key, action } = req.params;
+      const { service_key, action } = req.params;
       const httpMethod = req.method.toUpperCase();
 
-      // 1. Log request yang masuk untuk mempermudah debugging
-      console.log(`\n--- [DYNAMIC ROUTE] ${httpMethod} /${form_key}/${action} ---`);
+      // 1. Log request yang masuk untuk mempermudah debugging awal
+      console.log(`\n--- [DYNAMIC ROUTE] ${httpMethod} /${service_key}/${action} ---`);
 
-      const module = getModuleByKey(form_key);
+      const module = getModuleByKey(service_key);
       if (!module) {
-        return res.status(404).json({ error: `Service untuk '${form_key}' tidak ditemukan.` });
+        console.error(`🚨 [DYNAMIC ROUTE ERROR]: Service '${service_key}' tidak terdaftar di ModuleRegistry.`);
+        return res.status(404).json({ error: `Service untuk '${service_key}' tidak ditemukan.` });
       }
 
       const { service } = module;
-      // Mengubah format kebab-case (get-details) menjadi camelCase (getDetails)
+      // Mengubah format kebab-case (get-all-logs) menjadi camelCase (getAllLogs)
       const methodName = action.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
 
-      // 2. Validasi apakah method tersebut ada di service terkait
-      if (typeof (service as any)[methodName] !== 'function') {
-        return res.status(400).json({ 
-          error: `Method '${action}' (${methodName}) tidak tersedia pada service '${form_key}'.` 
-        });
-      }
-
       try {
-        const isPayloadMethod = ['POST', 'PUT'].includes(httpMethod);
+        if (typeof (service as any)[methodName] !== 'function') {
+          const errorMessage = `Method '${action}' tidak tersedia pada service '${service_key}'.`;
+          return res.status(400).json({ error: errorMessage });
+        }
 
-        // 3. Eksekusi satu baris ajaib menggunakan conditional array spreading
-        const result = await (service as any)[methodName](
-          ...parseArgs(req.query),
-          ...(isPayloadMethod ? [req.body] : [])
-        );
-
+        const  result = await (service as any)[methodName](req.query, req.body);
+       
         return res.status(httpMethod === 'POST' ? 201 : 200).json(result);
 
       } catch (err: any) {
-        // 4. Detail error tracker yang sangat lengkap di console terminal Anda
-        console.error(`\n=== 🚨 [DYNAMIC ROUTE ERROR] 🚨 ===`);
-        console.error(`[Route]: ${httpMethod} /${form_key}/${action}`);
-        console.error(`[Payload]:`, JSON.stringify(req.body));
+        // 4. Detail error tracker jika terjadi error runtime di dalam service (database, syntax, dll)
+        console.error(`\n============== 🚨 [DYNAMIC ROUTE RUNTIME ERROR] 🚨 ==============`);
+        console.error(`[Url]:`, JSON.stringify(req.url));
+        console.error(`[Route]: ${httpMethod} /${service_key}/${action}`);
+        console.error(`[Body]:`, JSON.stringify(req.body));
+        console.error(`[Query]:`, JSON.stringify(req.query));
+        console.error(`[Params]:`, JSON.stringify(req.params));
         console.error(`[Error]: ${err.message}`);
         console.error(`[Stack]:`, err.stack);
         console.error(`====================================\n`);
 
-        return res.status(500).json({ 
-          error: `Gagal mengeksekusi aksi '${action}' pada modul '${form_key}'`,
-          details: err.message 
+        return res.status(500).json({
+          error: `Gagal mengeksekusi aksi '${action}' pada modul '${service_key}'`,
+          details: err.message
         });
       }
     }

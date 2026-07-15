@@ -1,15 +1,8 @@
 // src/utils/menuGenerator.ts
+import { MenuItem } from '../interface/base.interface';
 import { ModuleRegistry } from '../services/index'; // 🌟 Import registry terpusat
 
-export interface MenuItem {
-    key: string;
-    icon: string;
-    label: string;
-    type:string;
-    route: string;
-    api: string;
-    menuCategory: string;
-}
+
 
 export const generateDynamicMenu = async (): Promise<MenuItem[]> => {
     const menuList: MenuItem[] = [];
@@ -28,7 +21,7 @@ export const generateDynamicMenu = async (): Promise<MenuItem[]> => {
     for (const module of ModuleRegistry) {
         const schema = module.schema as any; // 🌟 Di-cast ke 'any' agar TS tidak rewel jika properti dinamis berubah
 
-        if (schema && schema.key) {
+        if (schema && schema.key && !schema.isMenuHidden) {
             menuList.push({
                 key: schema.key,
                 icon: schema.icon || 'iconify:carbon:box', // Pakai fallback icon jika kosong

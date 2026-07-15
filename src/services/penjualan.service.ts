@@ -18,6 +18,7 @@ export const SCHEMA: TransactionSchema = {
   type: 'transaction',
   icon: 'iconify:mdi-cash-register',
   permissions: _LOGED_USER.permissions['penjualan'],
+  isMenuHidden:false,
   actions: [
     { key: 'print', label: 'Cetak Nota', type: 'printer' },
     { key: 'pay', label: 'Bayar Langsung', type: 'payment' },
@@ -180,10 +181,12 @@ export const PenjualanService: TransactionService = {
     return PenjualanService.getTransaction(Number(id));
   },
 
-  addDetails: async (headerId: number, body: any): Promise<any> => {
+  addDetails: async (params: any, body: any): Promise<any> => {
+    const headerId= params.header_key
+    const query=body.query;
     const product = await prisma.product.findFirst({
       where: {
-        id: Number(body.query),
+        id: Number(query),
       }
     });
 
@@ -225,6 +228,7 @@ export const PenjualanService: TransactionService = {
   },
 
   deleteDetails: async (headerId: number, id: number): Promise<any> => {
+    console.log(headerId)
     await prisma.penjualanDetail.delete({ where: { id: Number(id) } });
 
     await syncInvoiceTotal(Number(headerId));

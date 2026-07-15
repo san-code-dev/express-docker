@@ -1,13 +1,15 @@
-import { MasterSchema } from '../interface/base.interface';
+import { MasterSchema, MasterService } from '../interface/base.interface';
 import prisma from '../lib/prisma';
-import { createAuditLog } from '../utils/audit';
 import { parseFilterToPrisma } from '../utils/prismaFilterParser'
+import { AuditLogsService } from './audit-logs.service';
+
 export const SCHEMA: MasterSchema = {
-  key: 'Product',
+  key: 'product',
   label: 'Data Product',
   type: 'master' as const,
   icon: 'iconify:carbon:product',
   permissions: { create: true, edit: true, delete: true },
+  isMenuHidden: false,
   schema: [
     { key: 'id', label: 'Product ID', type: 'display', primary: true, readonly: true },
     { key: 'name', label: 'Product Name', type: 'text', required: true },
@@ -28,16 +30,19 @@ export const SCHEMA: MasterSchema = {
   data: [] as any[],
 };
 
-export const ProductService = {
 
-  async getModuleSchema() {
+
+export const ProductService: MasterService = {
+
+  getModuleSchema: function (): MasterSchema {
     return SCHEMA;
   },
 
 
-  async getAll(where: any = {}) {
+  async getAll(params?: any) {
+
     const products = await prisma.product.findMany({
-      ...(parseFilterToPrisma(where)),
+      where: parseFilterToPrisma(params.filter),
       orderBy: { createdAt: 'asc' }
     });
 
@@ -55,16 +60,7 @@ export const ProductService = {
     return SCHEMA;
   },
 
-  async getById(id: number) {
-    const product = await prisma.product.findUnique({ where: { id } });
-    if (!product) return null;
 
-    return {
-      ...product,
-      price: Number(product.price),
-      tanggalMasuk: product.tanggalMasuk.toISOString().split('T')[0]
-    };
-  },
 
   async create(body: any) {
     const product = await prisma.product.create({
@@ -78,7 +74,7 @@ export const ProductService = {
       }
     });
 
-    await createAuditLog({
+    await AuditLogsService.create({
       tableName: 'Product',
       action: 'created',
       oldData: null,
@@ -88,8 +84,10 @@ export const ProductService = {
     return product;
   },
 
-  async update(id: number, body: any) {
-    const oldData = await this.getById(id);
+  async update(params:any, body: any) {
+    const id = Number(params.id);
+    const oldData =  await prisma.product.findUnique({ where: { id:id } })
+
     if (!oldData) throw new Error('Product tidak ditemukan');
 
     const dataUpdate: any = { ...body };
@@ -98,11 +96,11 @@ export const ProductService = {
     if (dataUpdate.tanggalMasuk) dataUpdate.tanggalMasuk = new Date(dataUpdate.tanggalMasuk);
 
     const updatedProduct = await prisma.product.update({
-      where: { id },
+      where: { id:id },
       data: dataUpdate
     });
 
-    await createAuditLog({
+    await AuditLogsService.create({
       tableName: 'Product',
       action: 'update',
       oldData,
@@ -112,13 +110,14 @@ export const ProductService = {
     return updatedProduct;
   },
 
-  async delete(id: number) {
-    const oldData = await this.getById(id);
+  async delete(params: any) {
+    const id = Number(params.id);
+    const oldData =  await prisma.product.findUnique({ where: { id:id } })
     if (!oldData) throw new Error('Product tidak ditemukan');
 
-    const deletedProduct = await prisma.product.delete({ where: { id } });
+    const deletedProduct = await prisma.product.delete({ where: { id:id } });
 
-    await createAuditLog({
+    await AuditLogsService.create({
       tableName: 'Product',
       action: 'delete',
       oldData,
