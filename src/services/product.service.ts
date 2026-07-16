@@ -1,17 +1,18 @@
+import { Product, Prisma } from '@prisma/client';
 import { MasterSchema, MasterService } from '../interface/base.interface';
 import prisma from '../lib/prisma';
-import { parseFilterToPrisma } from '../utils/prismaFilterParser'
-import { AuditLogsService } from './audit-logs.service';
+import { parseFilterToPrisma } from '../utils/prismaFilterParser';
 
-export const SCHEMA: MasterSchema = {
+// 1. Terapkan Generic <Product> langsung dari Prisma ke SCHEMA
+export const SCHEMA: MasterSchema<Product> = {
   key: 'product',
   label: 'Data Product',
-  type: 'master' as const,
+  type: 'master', 
   icon: 'iconify:carbon:product',
   permissions: { create: true, edit: true, delete: true },
   isMenuHidden: false,
   schema: [
-    { key: 'id', label: 'Product ID', type: 'display', primary: true, readonly: true },
+    { key: 'id', label: 'Product ID', type: 'display', required: true, readonly: true, nullable: false },
     { key: 'name', label: 'Product Name', type: 'text', required: true },
     { key: 'price', label: 'Price', type: 'currency', required: true },
     { key: 'stok', label: 'Stock', type: 'number', required: true },
@@ -27,103 +28,78 @@ export const SCHEMA: MasterSchema = {
     },
     { key: 'tanggalMasuk', label: 'Tanggal Masuk', type: 'date' },
   ],
-  data: [] as any[],
+  // Data dibiarkan kosong secara default
 };
 
+// 2. Terapkan Generic <Product> pada implementasi Service
+export const ProductService: MasterService<Product> = {
 
-
-export const ProductService: MasterService = {
-
-  getModuleSchema: function (): MasterSchema {
+  getModuleSchema: function (): MasterSchema<Product> {
     return SCHEMA;
   },
 
-
-  async getAll(params?: any) {
-
+  async getAll(filter?: Record<string, any>): Promise<Product[]> {
     const products = await prisma.product.findMany({
-      where: parseFilterToPrisma(params.filter),
+      where: parseFilterToPrisma(filter),
       orderBy: { createdAt: 'asc' }
     });
 
-    // Mapping data agar ramah dengan komponen frontend Vue Anda
-    SCHEMA.data = products.map((p) => ({
-      id: p.id,
-      name: p.name,
-      price: Number(p.price), // Konversi Decimal ke Number untuk JavaScript/Vue
-      stok: p.stok,
-      description: p.description,
-      status: p.status,
-      tanggalMasuk: p.tanggalMasuk.toISOString().split('T')[0]
-    }));
-
-    return SCHEMA;
+    return products; // Murni Product[] tanpa mapping ulang
   },
 
+  async getById(key: string | number): Promise<Product | null> {
+    return await prisma.product.findUnique({ 
+      where: { id: Number(key) } 
+    });
+  },
 
-
-  async create(body: any) {
+  async create(body: Partial<Product>): Promise<Product> {
     const product = await prisma.product.create({
       data: {
         name: body.name || 'New Product',
-        price: body.price ? Number(body.price) : 0,
+        // Jika body.price dikirim sebagai angka/string dari UI, cast ke Decimal
+        price: body.price ? new Prisma.Decimal(body.price as any) : new Prisma.Decimal(0),
         stok: body.stok ? Number(body.stok) : 0,
-        description: body.description,
+        description: body.description || null,
         status: body.status || 'active',
-        tanggalMasuk: body.tanggalMasuk ? new Date(body.tanggalMasuk) : new Date()
+        // Jika body.tanggalMasuk dikirim sebagai string dari UI, cast ke Date
+        tanggalMasuk: body.tanggalMasuk ? new Date(body.tanggalMasuk as any) : new Date()
       }
-    });
-
-    await AuditLogsService.create({
-      tableName: 'Product',
-      action: 'created',
-      oldData: null,
-      newData: product
     });
 
     return product;
   },
 
-  async update(params:any, body: any) {
-    const id = Number(params.id);
-    const oldData =  await prisma.product.findUnique({ where: { id:id } })
+  async update(key: string | number, body: Partial<Product>): Promise<Product> {
+    const id = Number(key);
+    const oldData = await prisma.product.findUnique({ where: { id } });
 
     if (!oldData) throw new Error('Product tidak ditemukan');
 
-    const dataUpdate: any = { ...body };
-    if (dataUpdate.price !== undefined) dataUpdate.price = Number(dataUpdate.price);
-    if (dataUpdate.stok !== undefined) dataUpdate.stok = Number(dataUpdate.stok);
-    if (dataUpdate.tanggalMasuk) dataUpdate.tanggalMasuk = new Date(dataUpdate.tanggalMasuk);
+    const dataUpdate: Prisma.ProductUpdateInput = {};
+    
+    if (body.name !== undefined) dataUpdate.name = body.name;
+    if (body.price !== undefined) dataUpdate.price = new Prisma.Decimal(body.price as any);
+    if (body.stok !== undefined) dataUpdate.stok = Number(body.stok);
+    if (body.description !== undefined) dataUpdate.description = body.description;
+    if (body.status !== undefined) dataUpdate.status = body.status;
+    if (body.tanggalMasuk !== undefined) dataUpdate.tanggalMasuk = new Date(body.tanggalMasuk as any);
 
     const updatedProduct = await prisma.product.update({
-      where: { id:id },
+      where: { id },
       data: dataUpdate
-    });
-
-    await AuditLogsService.create({
-      tableName: 'Product',
-      action: 'update',
-      oldData,
-      newData: updatedProduct
     });
 
     return updatedProduct;
   },
 
-  async delete(params: any) {
-    const id = Number(params.id);
-    const oldData =  await prisma.product.findUnique({ where: { id:id } })
+  async delete(key: string | number): Promise<boolean> {
+    const id = Number(key);
+    const oldData = await prisma.product.findUnique({ where: { id } });
+    
     if (!oldData) throw new Error('Product tidak ditemukan');
 
-    const deletedProduct = await prisma.product.delete({ where: { id:id } });
-
-    await AuditLogsService.create({
-      tableName: 'Product',
-      action: 'delete',
-      oldData,
-      newData: null
-    });
-
-    return deletedProduct;
+    await prisma.product.delete({ where: { id } });
+    return true; 
   }
 };
