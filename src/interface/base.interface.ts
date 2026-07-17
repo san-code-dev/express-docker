@@ -12,6 +12,7 @@ interface BaseColumnSchema {
   label: string;
   highlight?: boolean;
   validation?: any;
+  size?:number;
 }
 
 interface PrimaryColumnSchema extends BaseColumnSchema {

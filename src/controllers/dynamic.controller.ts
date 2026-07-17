@@ -72,15 +72,18 @@ export const handleDynamicRequest = () => {
         return res.status(httpMethod === 'POST' ? 201 : 200).json(result);
 
       } catch (err: any) {
-        console.error(`\n============== 🚨 [DYNAMIC ROUTE RUNTIME ERROR] 🚨 ==============`);
+        console.error(`\n 🚨 [DYNAMIC ROUTE RUNTIME ERROR] `);
         console.error(`[Route]: ${httpMethod} /${service_key}/${action}`);
-        console.error(`[Error]: ${err.message}`);
-        console.error(`====================================\n`);
+        console.error(`[Body]:`,req.body);
+        console.error(`[Params]:`,req.params);
+        console.error('\x1b[31m%s\x1b[0m',`[Error]: ${err.message}`);
 
         return res.status(500).json({
           error: `Gagal mengeksekusi aksi '${action}' pada modul '${service_key}'`,
           details: err.message
         });
+      }finally{
+      console.log(`--- Response: ${res.statusCode} - ${res.statusMessage} ---`);
       }
     }
   };
