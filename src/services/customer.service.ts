@@ -35,7 +35,6 @@ export const CustomerService: MasterService<Customer> = {
     const customers = await prisma.customer.findMany({
       where: {
         ...prismaFilter,
-        deletedAt: null // Hanya mengambil data yang belum di-soft delete
       },
       orderBy: { createdAt: 'asc' }
     });
@@ -47,7 +46,6 @@ export const CustomerService: MasterService<Customer> = {
     return await prisma.customer.findFirst({
       where: {
         id: Number(key),
-        deletedAt: null // Memastikan tidak mengambil data yang sudah di-soft delete
       }
     });
   },
@@ -66,7 +64,7 @@ export const CustomerService: MasterService<Customer> = {
   async update(key: string | number, body: Partial<Customer>): Promise<Customer> {
     const id = Number(key);
     const oldData = await prisma.customer.findFirst({
-      where: { id, deletedAt: null }
+      where: { id }
     });
 
     if (!oldData) throw new Error('Customer tidak ditemukan atau telah dihapus');
@@ -89,16 +87,15 @@ export const CustomerService: MasterService<Customer> = {
   async delete(key: string | number): Promise<boolean> {
     const id = Number(key);
     const oldData = await prisma.customer.findFirst({
-      where: { id, deletedAt: null }
+      where: { id }
     });
 
     if (!oldData) throw new Error('Customer tidak ditemukan');
 
     // Sesuai catatan di schema.prisma: "Untuk Soft Delete data master"
     // Kita gunakan soft delete dengan mengisi field `deletedAt`
-    await prisma.customer.update({
+    await prisma.customer.delete({
       where: { id },
-      data: { deletedAt: new Date() }
     });
 
     return true;

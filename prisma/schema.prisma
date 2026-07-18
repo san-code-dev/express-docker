@@ -34,8 +34,6 @@ model Customer {
   alamat     String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime? // Untuk Soft Delete data master
-
   penjualan Penjualan[]
 }
 
