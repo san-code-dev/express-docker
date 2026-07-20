@@ -66,6 +66,7 @@ export const handleDynamicRequest = () => {
           'get-header': async () => await targetMethod(Number(req.query.id || req.body?.id)),
           'get-transaction': async () => await targetMethod(Number(req.query.id || req.body?.id)),
           'delete': async () => await targetMethod(Number(req.query.id || req.body?.id)),
+          'cancel-transaction': async () => await targetMethod(Number(req.query.id || req.body?.id)),
 
           // --- GET ALL (FILTER VIA QUERY) ---
           'get-all': async () => await targetMethod(req.query),
