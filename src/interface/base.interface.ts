@@ -1,21 +1,19 @@
-// =========================================================================
-// 1. LAYER COLUMN SCHEMA (VALIDASI KONDISIONAL / DISC. UNIONS)
-// =========================================================================
-
 export interface Options {
   label: string;
   value: string;
 }
 
-interface BaseColumnSchema {
-  key: string;
+// keyof T -> Memberikan auto-complete kolom dari Model Prisma
+// (string & {}) -> Tetap fleksibel jika ada kolom kustom/virtual/komputasi
+interface BaseColumnSchema<T = any> {
+  key: keyof T | (string & {});
   label: string;
   highlight?: boolean;
   validation?: any;
-  size?:number;
+  size?: number;
 }
 
-interface PrimaryColumnSchema extends BaseColumnSchema {
+interface PrimaryColumnSchema<T = any> extends BaseColumnSchema<T> {
   primary: true;
   readonly: true;
   nullable: false;
@@ -26,7 +24,7 @@ interface PrimaryColumnSchema extends BaseColumnSchema {
   relation?: never;
 }
 
-interface DisplayColumnSchema extends BaseColumnSchema {
+interface DisplayColumnSchema<T = any> extends BaseColumnSchema<T> {
   type: 'display';
   required: true;
   readonly: true;
@@ -37,7 +35,7 @@ interface DisplayColumnSchema extends BaseColumnSchema {
   relation?: never;
 }
 
-interface ComputedColumnSchema extends BaseColumnSchema {
+interface ComputedColumnSchema<T = any> extends BaseColumnSchema<T> {
   type: 'computed';
   formula: string; // Wajib string formula
   readonly?: boolean;
@@ -48,7 +46,7 @@ interface ComputedColumnSchema extends BaseColumnSchema {
   relation?: never;
 }
 
-interface RelationColumnSchema extends BaseColumnSchema {
+interface RelationColumnSchema<T = any> extends BaseColumnSchema<T> {
   type: 'relation';
   relation: { entity: string; valueField: string; displayField: string; api: string };
   primary?: boolean;
@@ -59,7 +57,7 @@ interface RelationColumnSchema extends BaseColumnSchema {
   options?: never;
 }
 
-interface SelectColumnSchema extends BaseColumnSchema {
+interface SelectColumnSchema<T = any> extends BaseColumnSchema<T> {
   type: 'select';
   options: Options[]; // Wajib array options
   primary?: boolean;
@@ -70,7 +68,7 @@ interface SelectColumnSchema extends BaseColumnSchema {
   relation?: never;
 }
 
-interface StandardColumnSchema extends BaseColumnSchema {
+interface StandardColumnSchema<T = any> extends BaseColumnSchema<T> {
   type?: 'text' | 'number' | 'date' | 'boolean' | 'currency' | 'textarea';
   primary?: false;
   readonly?: boolean;
@@ -81,13 +79,13 @@ interface StandardColumnSchema extends BaseColumnSchema {
   relation?: never;
 }
 
-export type ColumnSchema =
-  | PrimaryColumnSchema
-  | DisplayColumnSchema
-  | ComputedColumnSchema
-  | RelationColumnSchema
-  | SelectColumnSchema
-  | StandardColumnSchema;
+export type ColumnSchema<T = any> =
+  | PrimaryColumnSchema<T>
+  | DisplayColumnSchema<T>
+  | ComputedColumnSchema<T>
+  | RelationColumnSchema<T>
+  | SelectColumnSchema<T>
+  | StandardColumnSchema<T>;
 
 // =========================================================================
 // 2. LAYER MODUL SCHEMA (BLUEPRINT FOR FRONTEND RENDERING)
@@ -95,7 +93,7 @@ export type ColumnSchema =
 
 export interface Queue<Q = any> {
   label: string;
-  schema: ColumnSchema[];
+  schema: ColumnSchema<Q>[];
   data?: Q[];
 }
 
@@ -117,7 +115,7 @@ export interface MasterSchema<T = any> {
   isMenuHidden: boolean;
   permissions: { create: boolean; edit: boolean; delete: boolean; [key: string]: boolean };
   actions?: Array<{ key: string; label: string; type: string }>;
-  schema: ColumnSchema[];
+  schema: ColumnSchema<T>[]; // Generic T mengunci kolom ke model Master
   data?: T[];
 }
 
@@ -131,8 +129,8 @@ export interface TransactionSchema<H = any, D = any, Q = any> {
   permissions: { create: boolean; edit: boolean; delete: boolean; [key: string]: boolean };
   actions?: Array<{ key: string; label: string; type: string }>;
   queue: Queue<Q>;
-  header: { label: string; schema: ColumnSchema[]; data?: H | null };
-  details: { label: string; schema: ColumnSchema[]; data?: D[] };
+  header: { label: string; schema: ColumnSchema<H>[]; data?: H | null }; // Generic H mengunci kolom Header
+  details: { label: string; schema: ColumnSchema<D>[]; data?: D[] };     // Generic D mengunci kolom Detail
 }
 
 // =========================================================================

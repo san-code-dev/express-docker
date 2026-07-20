@@ -54,7 +54,8 @@ export const SCHEMA: TransactionSchema<Penjualan, PenjualanDetail, { id: number;
   details: {
     label: 'DAFTAR BARANG BELANJA',
     schema: [
-      { key: 'name', label: 'Nama', type: 'display', primary: true, readonly: true, nullable: false, size:250  },
+      { key: 'id', label:'id', type:'primary', primary: true, readonly:true, nullable:false},
+      { key: 'name', label: 'Nama', type: 'text', readonly: true, size:250  },
       {
         key: 'productId', label: 'Pilih Produk', type: 'relation', relation: {
           entity: 'product', valueField: 'id', displayField: 'name', api: '/api/product',

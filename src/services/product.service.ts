@@ -16,17 +16,19 @@ export const SCHEMA: MasterSchema<Product> = {
     { key: 'name', label: 'Product Name', type: 'text', required: true, size: 300 },
     { key: 'price', label: 'Price', type: 'currency', required: true },
     { key: 'stok', label: 'Stock', type: 'number', required: true },
-    { key: 'description', label: 'Description', type: 'textarea' },
     {
       key: 'status',
       label: 'Status',
       type: 'select',
+      size: 120,
       options: [
         { label: 'Aktif', value: 'active' },
         { label: 'Non-Aktif', value: 'inactive' }
       ]
     },
-    { key: 'tanggalMasuk', label: 'Tanggal Masuk', type: 'date' },
+    { key: 'tanggalMasuk', label: 'Tanggal Masuk', type: 'date', size:160 },
+
+    { key: 'description', label: 'Description', type: 'textarea', size: 200 },
   ],
   // Data dibiarkan kosong secara default
 };
