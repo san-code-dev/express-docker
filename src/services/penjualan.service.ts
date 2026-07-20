@@ -59,7 +59,8 @@ export const SCHEMA: TransactionSchema<Penjualan, PenjualanDetail, { id: number;
       {
         key: 'productId', label: 'Pilih Produk', type: 'relation', relation: {
           entity: 'product', valueField: 'id', displayField: 'name', api: '/api/product',
-        }, validation: { required: true }, size:250
+        }, 
+        validation: { required: true }, size:250
       },
       { key: 'quantity', label: 'Qty', type: 'number', validation: { required: true, min: 1 }, size:80 },
       { key: 'price', label: 'Harga Satuan', type: 'currency', readonly: true, size:150 },
