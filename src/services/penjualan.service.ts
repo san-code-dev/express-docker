@@ -47,7 +47,7 @@ export const SCHEMA: TransactionSchema<Penjualan, PenjualanDetail, { id: number;
         }, validation: { required: true }
       },
       { key: 'discount', label: 'Potongan Diskon', type: 'currency' },
-      { key: 'total', label: 'Total Bayar', type: 'currency', readonly: true, highlight: true },
+      { key: 'total', label: 'Total Bayar', type: 'currency', readonly: true, highlight: true,isHidden:true },
     ],
     data: null
   },

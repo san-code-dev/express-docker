@@ -11,6 +11,7 @@ interface BaseColumnSchema<T = any> {
   highlight?: boolean;
   validation?: any;
   size?: number;
+  isHidden?:boolean;
 }
 
 interface PrimaryColumnSchema<T = any> extends BaseColumnSchema<T> {
