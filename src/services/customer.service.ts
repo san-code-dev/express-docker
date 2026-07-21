@@ -15,7 +15,7 @@ export const SCHEMA: MasterSchema<Customer> = {
     { key: 'id', label: 'ID', type: 'display', required: true, readonly: true, nullable: false },
     { key: 'nmCustomer', label: 'Customer Name', type: 'text', required: true, size: 250 },
     { key: 'email', label: 'Email Address', type: 'text', required: true, size: 250 },
-    { key: 'telepon', label: 'No Telp', type: 'text', size:200 },
+    { key: 'telepon', label: 'No Telp', type: 'text', size: 200 },
     { key: 'alamat', label: 'Address', type: 'textarea' },
   ],
   // Data dibiarkan kosong secara default
@@ -23,7 +23,6 @@ export const SCHEMA: MasterSchema<Customer> = {
 
 // 2. Terapkan Generic <Customer> pada implementasi Service
 export const CustomerService: MasterService<Customer> = {
-
   getModuleSchema: function (): MasterSchema<Customer> {
     return SCHEMA;
   },
@@ -99,5 +98,20 @@ export const CustomerService: MasterService<Customer> = {
     });
 
     return true;
+  },
+
+
+  searchData: async function (keyword: string): Promise<any> {
+    const data = await prisma.customer.findMany(
+      { 
+        where: {
+          OR: [
+            { id: Number(keyword) },
+            { nmCustomer: { contains: keyword, mode: 'insensitive' } },
+          ]
+        }
+      }
+    )
+    return data
   }
 };

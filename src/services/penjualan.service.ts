@@ -55,13 +55,8 @@ export const SCHEMA: TransactionSchema<Penjualan, PenjualanDetail, { id: number;
     label: 'DAFTAR BARANG BELANJA',
     schema: [
       { key: 'id', label:'id', type:'primary', primary: true, readonly:true, nullable:false},
-      { key: 'name', label: 'Nama', type: 'text', readonly: true, size:250  },
-      {
-        key: 'productId', label: 'Pilih Produk', type: 'relation', relation: {
-          entity: 'product', valueField: 'id', displayField: 'name', api: '/api/product',
-        }, 
-        validation: { required: true }, size:250
-      },
+      { key: 'productId', label: 'Kode Barang', type: 'text', readonly: true,},
+      { key:'nmProduct',label:'Nama Barang',type:'text', readonly:true,size:250,},
       { key: 'quantity', label: 'Qty', type: 'number', validation: { required: true, min: 1 }, size:80 },
       { key: 'price', label: 'Harga Satuan', type: 'currency', readonly: true, size:150 },
       { key: 'subtotal', label: 'Subtotal', readonly: true, type: 'computed', formula: '{quantity} * {price}', size:250 }
@@ -71,7 +66,6 @@ export const SCHEMA: TransactionSchema<Penjualan, PenjualanDetail, { id: number;
 };
 
 export const PenjualanService: TransactionService<Penjualan, PenjualanDetail, { id: number; label: string }> = {
-  
   getModuleSchema() {
     return SCHEMA;
   },
@@ -146,7 +140,7 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail, { 
     });
   },
 
-async addDetails(headerId: any, body: { query: string | number }) {
+  async addDetails(headerId: any, body: { query: string | number; }) {
     // 1. Pastikan headerId dikonversi ke integer secara aman
     const parsedHeaderId = parseInt(headerId, 10);
     if (isNaN(parsedHeaderId)) {
@@ -157,8 +151,8 @@ async addDetails(headerId: any, body: { query: string | number }) {
       // 2. Cari produk berdasarkan ID (atau bisa juga ditambahkan fallback pencarian berdasarkan nama/barcode jika query berupa string)
       const isNumericQuery = !isNaN(Number(body.query));
       const product = await tx.product.findFirst({
-        where: isNumericQuery 
-          ? { id: Number(body.query) } 
+        where: isNumericQuery
+          ? { id: Number(body.query) }
           : { name: { contains: String(body.query), mode: 'insensitive' } } // bonus pencarian teks sensitif
       });
 
@@ -167,6 +161,7 @@ async addDetails(headerId: any, body: { query: string | number }) {
       // 3. Masukkan detail transaksi baru menggunakan parsedHeaderId yang sudah aman
       const newDetail = await tx.penjualanDetail.create({
         data: {
+          nmProduct: product.name,
           quantity: 1,
           price: product.price,
           product: { connect: { id: product.id } },
@@ -217,8 +212,15 @@ async addDetails(headerId: any, body: { query: string | number }) {
       where: { id },
       data: { noInvoice: finalInvoiceNo }
     });
+  },
+
+
+  searchData: function (keyword: string): Promise<any> {
+    throw new Error('Function not implemented.');
   }
 };
+
+
 
 // Fungsi internal yang aman dijalankan di dalam scope Prisma Transaction Client
 async function syncInvoiceTotalInternal(penjualanId: number, txClient: Prisma.TransactionClient): Promise<void> {

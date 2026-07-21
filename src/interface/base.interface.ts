@@ -11,7 +11,7 @@ interface BaseColumnSchema<T = any> {
   highlight?: boolean;
   validation?: any;
   size?: number;
-  isHidden?:boolean;
+  isHidden?: boolean;
 }
 
 interface PrimaryColumnSchema<T = any> extends BaseColumnSchema<T> {
@@ -114,7 +114,7 @@ export interface MasterSchema<T = any> {
   label: string;
   type: 'master';
   isMenuHidden: boolean;
-  permissions: { create: boolean; edit: boolean; delete: boolean; [key: string]: boolean };
+  permissions: { create: boolean; edit: boolean; delete: boolean;[key: string]: boolean };
   actions?: Array<{ key: string; label: string; type: string }>;
   schema: ColumnSchema<T>[]; // Generic T mengunci kolom ke model Master
   data?: T[];
@@ -127,7 +127,7 @@ export interface TransactionSchema<H = any, D = any, Q = any> {
   prefix: string;
   type: 'transaction';
   isMenuHidden: boolean;
-  permissions: { create: boolean; edit: boolean; delete: boolean; [key: string]: boolean };
+  permissions: { create: boolean; edit: boolean; delete: boolean;[key: string]: boolean };
   actions?: Array<{ key: string; label: string; type: string }>;
   queue: Queue<Q>;
   header: { label: string; schema: ColumnSchema<H>[]; data?: H | null }; // Generic H mengunci kolom Header
@@ -145,22 +145,24 @@ export interface MasterService<T> {
   create(body: Partial<T>): Promise<T>;
   update(key: string | number, body: Partial<T>): Promise<T>;
   delete(key: string | number): Promise<boolean>;
+  searchData(keyword: string): Promise<any>;
 }
 
 export interface TransactionService<H, D, Q = any> {
   getModuleSchema(): TransactionSchema<H, D, Q>;
-  getQueue(): Promise<Q[]>; 
+  getQueue(): Promise<Q[]>;
   getHeader(id: number): Promise<H | null>;
   getDetails(headerId: number): Promise<D[]>;
 
   newTransaction(body?: Partial<H>): Promise<H>;
   getTransaction(id: number): Promise<{ header: H; details: any[] } | null>;
   getLastTransaction(): Promise<H | null>;
-  cancelTransaction(id: number, body?: any): Promise<boolean>; 
+  cancelTransaction(id: number, body?: any): Promise<boolean>;
   saveTransaction(id: number, body?: any): Promise<H>;
   updateHeader(id: number, body: Partial<H>): Promise<H>;
 
-  addDetails(headerId: number, body: any): Promise<D>; 
+  addDetails(headerId: number, body: any): Promise<D>;
   updateDetails(headerId: number, id: number, body: Partial<D>): Promise<D>;
   deleteDetails(headerId: number, id: number): Promise<boolean>;
+  searchData(keyword: string): Promise<any>;
 }

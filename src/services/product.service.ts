@@ -26,7 +26,7 @@ export const SCHEMA: MasterSchema<Product> = {
         { label: 'Non-Aktif', value: 'inactive' }
       ]
     },
-    { key: 'tanggalMasuk', label: 'Tanggal Masuk', type: 'date', size:160 },
+    { key: 'tanggalMasuk', label: 'Tanggal Masuk', type: 'date', size: 160 },
 
     { key: 'description', label: 'Description', type: 'textarea', size: 200 },
   ],
@@ -35,7 +35,6 @@ export const SCHEMA: MasterSchema<Product> = {
 
 // 2. Terapkan Generic <Product> pada implementasi Service
 export const ProductService: MasterService<Product> = {
-
   getModuleSchema: function (): MasterSchema<Product> {
     return SCHEMA;
   },
@@ -101,5 +100,18 @@ export const ProductService: MasterService<Product> = {
 
     await prisma.product.delete({ where: { id } });
     return true;
+  },
+  searchData: async function (keyword: string): Promise<any> {
+    const data = await prisma.product.findMany(
+      {
+        where: {
+          OR: [
+            { id: Number(keyword) },
+            { name: { contains: keyword, mode: 'insensitive' } },
+          ]
+        }
+      }
+    )
+    return data
   }
 };
