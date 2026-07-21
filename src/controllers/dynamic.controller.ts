@@ -70,6 +70,8 @@ export const handleDynamicRequest = () => {
 
           // --- GET ALL (FILTER VIA QUERY) ---
           'get-all': async () => await targetMethod(req.query),
+          'search-data': async () => await targetMethod(req.query.keyword),
+          
         };
 
         // Execution: Jika action terdaftar di handler gunakan itu, jika tidak ada (fallback) eksekusi tanpa argumen

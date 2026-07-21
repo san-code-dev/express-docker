@@ -102,6 +102,7 @@ export const ProductService: MasterService<Product> = {
     return true;
   },
   searchData: async function (keyword: string): Promise<any> {
+    console.log('data:',keyword)
     const data = await prisma.product.findMany(
       {
         where: {
