@@ -15,13 +15,13 @@ function getLoggedUser() {
   };
 }
 
-export const SCHEMA: TransactionSchema<Penjualan, PenjualanDetail, { id: number; label: string }> = {
+export const SCHEMA: TransactionSchema<Penjualan, PenjualanDetail> = {
   key: 'penjualan',
   prefix: 'PJ',
   label: 'Transaksi Penjualan (POS)',
   type: 'transaction',
   icon: 'iconify:mdi-cash-register',
-  permissions: { view: true, create: true, edit: false, delete: false }, // Harusnya dinamis atau via middleware, sementara di-hardcode aman untuk schema static
+  permissions: { view: true, create: true, edit: false, delete: false },
   isMenuHidden: false,
   actions: [
     { key: 'print', label: 'Cetak Nota', type: 'printer' },
@@ -47,25 +47,25 @@ export const SCHEMA: TransactionSchema<Penjualan, PenjualanDetail, { id: number;
         }, validation: { required: true }
       },
       { key: 'discount', label: 'Potongan Diskon', type: 'currency' },
-      { key: 'total', label: 'Total Bayar', type: 'currency', readonly: true, highlight: true,isHidden:true },
+      { key: 'total', label: 'Total Bayar', type: 'currency', readonly: true, highlight: true, isHidden: true },
     ],
     data: null
   },
   details: {
     label: 'DAFTAR BARANG BELANJA',
     schema: [
-      { key: 'id', label:'id', type:'primary', primary: true, readonly:true, nullable:false},
-      { key: 'productId', label: 'Kode Barang', type: 'text', readonly: true,},
-      { key:'nmProduct',label:'Nama Barang',type:'text', readonly:true,size:250,},
-      { key: 'quantity', label: 'Qty', type: 'number', validation: { required: true, min: 1 }, size:80 },
-      { key: 'price', label: 'Harga Satuan', type: 'currency', readonly: true, size:150 },
-      { key: 'subtotal', label: 'Subtotal', readonly: true, type: 'computed', formula: '{quantity} * {price}', size:250 }
+      { key: 'id', label: 'id', type: 'primary', primary: true, readonly: true, nullable: false },
+      { key: 'productId', label: 'Kode Barang', type: 'text', readonly: true },
+      { key: 'nmProduct', label: 'Nama Barang', type: 'text', readonly: true, size: 250 },
+      { key: 'quantity', label: 'Qty', type: 'number', validation: { required: true, min: 1 }, size: 80 },
+      { key: 'price', label: 'Harga Satuan', type: 'currency', readonly: true, size: 150 },
+      { key: 'subtotal', label: 'Subtotal', readonly: true, type: 'computed', formula: '{quantity} * {price}', size: 250 }
     ],
     data: []
   }
 };
 
-export const PenjualanService: TransactionService<Penjualan, PenjualanDetail, { id: number; label: string }> = {
+export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = {
   getModuleSchema() {
     return SCHEMA;
   },
@@ -90,7 +90,6 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail, { 
   },
 
   async getLastTransaction() {
-    // Jauh lebih efisien daripada memanggil getQueue()
     const lastTx = await prisma.penjualan.findFirst({
       orderBy: { id: 'desc' }
     });
@@ -141,31 +140,28 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail, { 
   },
 
   async addDetails(headerId: any, body: { query: string | number; }) {
-    // 1. Pastikan headerId dikonversi ke integer secara aman
     const parsedHeaderId = parseInt(headerId, 10);
     if (isNaN(parsedHeaderId)) {
       throw new Error('ID Transaksi (headerId) tidak valid atau kosong');
     }
 
     return await prisma.$transaction(async (tx) => {
-      // 2. Cari produk berdasarkan ID (atau bisa juga ditambahkan fallback pencarian berdasarkan nama/barcode jika query berupa string)
       const isNumericQuery = !isNaN(Number(body.query));
       const product = await tx.product.findFirst({
         where: isNumericQuery
           ? { id: Number(body.query) }
-          : { name: { contains: String(body.query), mode: 'insensitive' } } // bonus pencarian teks sensitif
+          : { name: { contains: String(body.query), mode: 'insensitive' } }
       });
 
       if (!product) throw new Error('Produk tidak ditemukan');
 
-      // 3. Masukkan detail transaksi baru menggunakan parsedHeaderId yang sudah aman
       const newDetail = await tx.penjualanDetail.create({
         data: {
           nmProduct: product.name,
           quantity: 1,
           price: product.price,
           product: { connect: { id: product.id } },
-          penjualan: { connect: { id: parsedHeaderId } } // Aman dari NaN!
+          penjualan: { connect: { id: parsedHeaderId } }
         }
       });
 
@@ -199,8 +195,6 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail, { 
   },
 
   async cancelTransaction(id: number) {
-    // Idealnya penjualan POS yang dicancel di-update statusnya saja ('CANCELLED'), bukan di hard-delete. 
-    // Tapi jika kebutuhan bisnis memang hapus total:
     await prisma.penjualan.delete({ where: { id } });
     return true;
   },
@@ -214,13 +208,10 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail, { 
     });
   },
 
-
   searchData: function (keyword: string): Promise<any> {
     throw new Error('Function not implemented.');
   }
 };
-
-
 
 // Fungsi internal yang aman dijalankan di dalam scope Prisma Transaction Client
 async function syncInvoiceTotalInternal(penjualanId: number, txClient: Prisma.TransactionClient): Promise<void> {
@@ -232,7 +223,6 @@ async function syncInvoiceTotalInternal(penjualanId: number, txClient: Prisma.Tr
   if (!tx) return;
 
   const grossTotal = tx.details.reduce((sum, item) => {
-    // Ambil nilai numerik Decimal dengan aman
     const price = item.price instanceof Prisma.Decimal ? item.price.toNumber() : Number(item.price);
     return sum + (item.quantity * price);
   }, 0);

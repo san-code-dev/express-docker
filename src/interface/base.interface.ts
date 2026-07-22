@@ -3,6 +3,12 @@ export interface Options {
   value: string;
 }
 
+// Interface standar untuk struktur item antrean/list ringkas
+export interface BaseQueueItem {
+  id: number;
+  label: string;
+}
+
 // keyof T -> Memberikan auto-complete kolom dari Model Prisma
 // (string & {}) -> Tetap fleksibel jika ada kolom kustom/virtual/komputasi
 interface BaseColumnSchema<T = any> {
@@ -92,7 +98,7 @@ export type ColumnSchema<T = any> =
 // 2. LAYER MODUL SCHEMA (BLUEPRINT FOR FRONTEND RENDERING)
 // =========================================================================
 
-export interface Queue<Q = any> {
+export interface Queue<Q = BaseQueueItem> {
   label: string;
   schema: ColumnSchema<Q>[];
   data?: Q[];
@@ -114,20 +120,20 @@ export interface MasterSchema<T = any> {
   label: string;
   type: 'master';
   isMenuHidden: boolean;
-  permissions: { create: boolean; edit: boolean; delete: boolean;[key: string]: boolean };
+  permissions: { create: boolean; edit: boolean; delete: boolean; [key: string]: boolean };
   actions?: Array<{ key: string; label: string; type: string }>;
   schema: ColumnSchema<T>[]; // Generic T mengunci kolom ke model Master
   data?: T[];
 }
 
-export interface TransactionSchema<H = any, D = any, Q = any> {
+export interface TransactionSchema<H = any, D = any, Q = BaseQueueItem> {
   icon?: string;
   key: string;
   label: string;
   prefix: string;
   type: 'transaction';
   isMenuHidden: boolean;
-  permissions: { create: boolean; edit: boolean; delete: boolean;[key: string]: boolean };
+  permissions: { create: boolean; edit: boolean; delete: boolean; [key: string]: boolean };
   actions?: Array<{ key: string; label: string; type: string }>;
   queue: Queue<Q>;
   header: { label: string; schema: ColumnSchema<H>[]; data?: H | null }; // Generic H mengunci kolom Header
@@ -148,7 +154,7 @@ export interface MasterService<T> {
   searchData(keyword: string): Promise<any>;
 }
 
-export interface TransactionService<H, D, Q = any> {
+export interface TransactionService<H = any, D = any, Q = BaseQueueItem> {
   getModuleSchema(): TransactionSchema<H, D, Q>;
   getQueue(): Promise<Q[]>;
   getHeader(id: number): Promise<H | null>;
