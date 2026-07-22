@@ -101,17 +101,43 @@ export const CustomerService: MasterService<Customer> = {
   },
 
 
-  searchData: async function (keyword: string): Promise<any> {
-    const data = await prisma.customer.findMany(
-      { 
-        where: {
-          OR: [
-            { id: Number(keyword) },
-            { nmCustomer: { contains: keyword, mode: 'insensitive' } },
-          ]
+  searchData: async function (keyword: string): Promise<MasterSchema<Customer>> {
+    const cleanKeyword = keyword.trim();
+    let data: Customer[] = [];
+
+    if (cleanKeyword) {
+        const numId = Number(cleanKeyword);
+        const isValidNumber = !isNaN(numId);
+
+        const orConditions: Prisma.CustomerWhereInput[] = [
+            { nmCustomer: { contains: cleanKeyword, mode: 'insensitive' } },
+            { email: { contains: cleanKeyword, mode: 'insensitive' } },
+            { telepon: { contains: cleanKeyword, mode: 'insensitive' } },
+            { alamat: { contains: cleanKeyword, mode: 'insensitive' } },
+        ];
+
+        if (isValidNumber) {
+            orConditions.push({ id: numId });
         }
-      }
-    )
-    return data
-  }
+
+        data = await prisma.customer.findMany({
+            where: {
+                OR: orConditions,
+            },
+        });
+    } else {
+        data = await this.getAll();
+    }
+
+    if (!data || data.length === 0) {
+        throw new Error('Customer tidak ditemukan');
+    }
+
+    const schemaResponse: MasterSchema<Customer> = {
+        ...structuredClone(SCHEMA),
+        data: data,
+    };
+
+    return schemaResponse;
+}
 };
