@@ -6,15 +6,46 @@ services:
     container_name: express-app-dev
     ports:
       - "3000:3000"
+    restart: unless-stopped
     env_file:
       - .env
     volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
-      - /usr/src/app/.prisma
+      # Ini bukan menyalin file sekali jalan, melainkan SYNCHRONIZE (sinkronisasi dua arah).
+      # Apa pun yang Anda ubah di laptop akan INSTAN berubah di container detik itu juga.
+      # Dockerignore TETAP berlaku saat proses 'build' image, tetapi setelah masuk ke tahap 'volumes' (runtime), 
+      # semua file di folder lokal Anda akan terhubung ke container, KECUALI yang ditimpa oleh baris di bawahnya.
+      - .:/usr/src/app 
+
+      # Tujuannya mengisolasi node_modules di dalam container agar tidak tertimpa oleh node_modules milik OS laptop Anda.
+      # KOREKSI KODE: Agar otomatisasi 'npm install' berjalan lancar dan persisten, ubah menjadi named volume:
+      - node_modules_dev:/usr/src/app/node_modules 
+
+      # Prisma menyimpan engine binary (Query Engine) yang spesifik OS 
+      # serta file client di folder `.prisma`. Baris ini memastikan client Linux container tidak tertimpa versi laptop.
+      # KOREKSI KODE: Ubah juga menjadi named volume agar persisten:
+      - prisma_dev:/usr/src/app/.prisma 
+
     command: >
       sh -c "
-        npx prisma migrate dev --name init &&
-        npx prisma generate &&
+        # Setiap container dinyalakan, perintah ini akan mengecek package.json.
+        # Jika Anda menambah library baru di laptop, dia akan otomatis menginstall-nya ke dalam container saat startup.
+        npm install && 
+
+        # db push akan menyamakan skema database eksternal mysql/postgresql/dll Anda dengan schema.prisma secara langsung.
+        # jika ada perubahan struktur yang ekstrem (misal hapus kolom) akan muncul, 
+        npx prisma db push && 
+
+        # 6. PENJELASAN: Benar. Perintah ini wajib dijalankan setelah db push atau saat ada perubahan skema 
+        # untuk memperbarui TypeScript typings (Prisma Client) agar teks editor Anda tidak error.
+        npx prisma generate && 
+
+        # 7. PENJELASAN: Menjalankan aplikasi Node.js dalam mode development (biasanya menggunakan nodemon/ts-node-dev).
         npm run dev
       "
+
+# 8. PENJELASAN: Mendeklarasikan Named Volume. 
+# Fungsinya membuat ruang penyimpanan khusus di dalam Docker. Jadi, saat container dimatikan/dihapus, 
+# Docker tidak perlu mendownload ulang semua library dari nol di startup berikutnya (hemat kuota & waktu).
+volumes:
+  node_modules_dev:
+  prisma_dev:

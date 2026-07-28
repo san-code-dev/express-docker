@@ -8,7 +8,7 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
+  id        Int      @id @default(autoincrement())
   name      String
   email     String   @unique
   password  String
@@ -16,16 +16,131 @@ model User {
   createdAt DateTime @default(now())
 }
 
-model Product {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  price       Float
-  createdAt   DateTime @default(now())
-}
-
-
 enum Role {
+  SUPERADMIN
   ADMIN
   USER
+}
+
+// ==========================================
+// MASTER DATA MODUL
+// ==========================================
+
+model Customer {
+  id         Int       @id @default(autoincrement())
+  nmCustomer String
+  email      String?   
+  telepon    String?
+  alamat     String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  penjualan Penjualan[]
+}
+
+model Product {
+  id           Int               @id @default(autoincrement())
+  name         String
+  price        Decimal           @db.Decimal(15, 2)
+  stok         Int               @default(0)
+  description  String?           @db.Text
+  status       String            @default("active") // "active" | "inactive"
+  tanggalMasuk DateTime          @default(now())
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  deletedAt    DateTime? // Mencegah rusaknya histori transaksi jika produk dihapus
+
+  jualDetails  PenjualanDetail[]
+}
+
+// Master Chart of Account (Penting untuk validasi Akuntansi)
+model CoA {
+  id          String   @id // Contoh: "1101", "4101"
+  namaAkun    String
+  kelompok    String   // "Aset", "Liabilitas", "Ekuitas", "Pendapatan", "Beban"
+  createdAt   DateTime @default(now())
+  
+  jurnals     JurnalItem[]
+}
+
+// ==========================================
+// TRANSACTION MODUL (HEADER & DETAIL)
+// ==========================================
+
+model Penjualan {
+  id         Int      @id @default(autoincrement())
+  noInvoice  String   @unique
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  discount  Decimal  @default(0) @db.Decimal(15, 2)
+  total     Decimal  @db.Decimal(15, 2) // Total bersih (setelah diskon) untuk validasi invoice
+  createdBy String 
+  createdAt DateTime @default(now())
+
+  details   PenjualanDetail[]
+  jurnals   JurnalAkuntansi[] // Melacak jurnal otomatis yang lahir dari invoice ini
+}
+
+model PenjualanDetail {
+  id          Int       @id @default(autoincrement())
+  penjualanId Int
+  penjualan   Penjualan @relation(fields: [penjualanId], references: [id], onDelete: Cascade)
+
+  productId Int
+  nmProduct String?
+  product   Product @relation(fields: [productId], references: [id])
+
+  quantity Int
+  price    Decimal @db.Decimal(15, 2) // Mengunci harga historis saat transaksi terjadi
+  
+  // subTotal dihapus karena merupakan kolom kalkulasi (Qty * Price)
+}
+
+// ==========================================
+// GL & ACCOUNTING MODUL (Untuk Auto-Jurnal)
+// ==========================================
+
+model JurnalAkuntansi {
+  id          Int       @id @default(autoincrement())
+  noJurnal    String    @unique
+  tanggal     DateTime  @default(now())
+  keterangan  String    @db.Text
+  createdAt   DateTime  @default(now())
+  
+  // Opsional: Menghubungkan jurnal ke sumber transaksinya (Audit Trail ERP)
+  penjualanId Int?
+  penjualan   Penjualan? @relation(fields: [penjualanId], references: [id], onDelete: SetNull)
+
+  lineItems JurnalItem[]
+}
+
+model JurnalItem {
+  id              Int             @id @default(autoincrement())
+  jurnalId        Int
+  jurnalAkuntansi JurnalAkuntansi @relation(fields: [jurnalId], references: [id], onDelete: Cascade)
+
+  akunId          String
+  akun            CoA             @relation(fields: [akunId], references: [id])
+  
+  tipe            TipeJurnal
+  nominal         Decimal         @db.Decimal(15, 2)
+}
+
+enum TipeJurnal {
+  DEBIT
+  KREDIT
+}
+
+// ==========================================
+// AUDIT SYSTEM MODUL
+// ==========================================
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  tableName String
+  action    String
+  user      String
+  oldData   Json?
+  newData   Json?
+  createdAt DateTime @default(now())
 }

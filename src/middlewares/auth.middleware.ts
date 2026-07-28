@@ -1,16 +1,14 @@
 import { Request, Response, NextFunction } from "express";
-import { verifyToken } from "../utils/jwt";
+import { verifyToken } from "../utils/jwt"
+import { CustomJwtPayload } from "../utils/jwt";
+import { userContextStorage } from "../utils/context"; // 👈 Import storage baru
 
-export interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    role: string;
-  };
+export interface AuthenticatedRequest extends Request {
+  user?: CustomJwtPayload;
 }
 
 const authMiddleware = (
-  req: AuthRequest,
+  req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
@@ -23,7 +21,11 @@ const authMiddleware = (
   try {
     const decoded = verifyToken(token);
     req.user = decoded;
-    next();
+
+    userContextStorage.run(decoded, () => {
+      next();
+    });
+    
   } catch (error) {
     return res.status(401).json({ message: "Cookies ada tapi token tidak valid" });
   }
