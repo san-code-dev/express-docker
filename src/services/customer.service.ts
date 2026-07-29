@@ -1,7 +1,9 @@
+// src/services/customer.service.ts
 import { Customer, Prisma } from '@prisma/client';
 import { MasterSchema, MasterService } from '../interface/base.interface';
 import prisma from '../lib/prisma';
 import { parseFilterToPrisma } from '../utils/prismaFilterParser';
+import { getSocketInstance } from '../lib/socket';
 
 // 1. Terapkan Generic <Customer> langsung dari Prisma ke SCHEMA
 export const SCHEMA: MasterSchema<Customer> = {
@@ -28,7 +30,6 @@ export const CustomerService: MasterService<Customer> = {
   },
 
   async getAll(filter?: Record<string, any>): Promise<Customer[]> {
-    // Menggabungkan filter kustom dengan kondisi soft delete (deletedAt: null)
     const prismaFilter = parseFilterToPrisma(filter) || {};
 
     const customers = await prisma.customer.findMany({
@@ -38,7 +39,12 @@ export const CustomerService: MasterService<Customer> = {
       orderBy: { createdAt: 'asc' }
     });
 
-    return customers; // Murni Customer[] tanpa mapping ulang
+    SCHEMA.data = customers;
+    
+    // Broadcast data terbaru saat getAll dipanggil
+    triggerRealtimeEmit();
+
+    return customers;
   },
 
   async getById(key: string | number): Promise<Customer | null> {
@@ -52,10 +58,16 @@ export const CustomerService: MasterService<Customer> = {
   async create(body: Partial<Customer>): Promise<Customer> {
     const customer = await prisma.customer.create({
       data: {
-        nmCustomer: 'New Customer',
-        email: '',
+        nmCustomer: body.nmCustomer || 'New Customer',
+        email: body.email || '',
+        telepon: body.telepon,
+        alamat: body.alamat,
       }
     });
+
+    // Perbarui data di schema dan trigger realtime ke frontend
+    await refreshSchemaData();
+    triggerRealtimeEmit();
 
     return customer;
   },
@@ -80,6 +92,10 @@ export const CustomerService: MasterService<Customer> = {
       data: dataUpdate
     });
 
+    // Perbarui data di schema dan trigger realtime ke frontend
+    await refreshSchemaData();
+    triggerRealtimeEmit();
+
     return updatedCustomer;
   },
 
@@ -91,15 +107,16 @@ export const CustomerService: MasterService<Customer> = {
 
     if (!oldData) throw new Error('Customer tidak ditemukan');
 
-    // Sesuai catatan di schema.prisma: "Untuk Soft Delete data master"
-    // Kita gunakan soft delete dengan mengisi field `deletedAt`
     await prisma.customer.delete({
       where: { id },
     });
 
+    // Perbarui data di schema dan trigger realtime ke frontend
+    await refreshSchemaData();
+    triggerRealtimeEmit();
+
     return true;
   },
-
 
   searchData: async function (keyword: string): Promise<MasterSchema<Customer>> {
     const cleanKeyword = keyword.trim();
@@ -133,11 +150,29 @@ export const CustomerService: MasterService<Customer> = {
         throw new Error('Customer tidak ditemukan');
     }
 
+    SCHEMA.data = data;
+
     const schemaResponse: MasterSchema<Customer> = {
         ...structuredClone(SCHEMA),
         data: data,
     };
 
     return schemaResponse;
-}
+  }
 };
+
+// Helper untuk menyegarkan data list di dalam global SCHEMA
+async function refreshSchemaData() {
+  const customers = await prisma.customer.findMany({
+    orderBy: { createdAt: 'asc' }
+  });
+  SCHEMA.data = customers;
+}
+
+// Helper untuk mengirim event realtime via WebSocket
+function triggerRealtimeEmit() {
+  const io = getSocketInstance();
+  if (io) {
+    io.emit('customer_getAll_updated', SCHEMA);
+  }
+}

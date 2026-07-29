@@ -1,6 +1,7 @@
 // src/controllers/dynamic.controller.ts
 import { Request, Response, NextFunction } from 'express';
 import { ModuleRegistry } from '../services/index';
+import { getSocketInstance } from '../lib/socket'; // <--- Import helper socket
 
 const getModuleByKey = (key: string) => {
   return ModuleRegistry.find(m => m.schema.key.toLowerCase() === key.toLowerCase());
@@ -61,7 +62,6 @@ export const handleDynamicRequest = () => {
           },
 
           // --- CRUD OPERATIONS WITH ID ONLY ---
-          // Menggunakan optional chaining (req.body?.id) agar tidak crash jika req.body undefined
           'get-by-id': async () => await targetMethod(Number(req.query.id || req.body?.id)),
           'get-header': async () => await targetMethod(Number(req.query.id || req.body?.id)),
           'get-transaction': async () => await targetMethod(Number(req.query.id || req.body?.id)),
@@ -71,13 +71,23 @@ export const handleDynamicRequest = () => {
           // --- GET ALL (FILTER VIA QUERY) ---
           'get-all': async () => await targetMethod(req.query),
           'search-data': async () => await targetMethod(req.query.keyword),
-          
         };
 
         // Execution: Jika action terdaftar di handler gunakan itu, jika tidak ada (fallback) eksekusi tanpa argumen
         const executeAction = actionHandlers[action] || (async () => await targetMethod());
         const result = await executeAction();
 
+        // =========================================================================
+        // BROADCAST REAL-TIME OTOMATIS (Menggunakan getSocketInstance)
+        // =========================================================================
+        const io = getSocketInstance();
+        if (httpMethod !== 'GET' && io) {
+          io.emit(`realtime_update:${service_key}`, {
+            action,
+            service: service_key,
+            data: result
+          });
+        }
         // =========================================================================
 
         return res.status(httpMethod === 'POST' ? 201 : 200).json(result);

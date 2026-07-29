@@ -4,8 +4,8 @@ import prisma from '../lib/prisma';
 import { userContextStorage } from '../utils/context';
 import { TransactionSchema, TransactionService } from '../interface/base.interface';
 import { generateNewInvoiceNumber, sendResponse } from '../utils/erpUtils';
+import { getSocketInstance } from '../lib/socket';
 
-// Helper fungsi agar evaluasi context user bersifat dinamis per request
 function getLoggedUser() {
   return {
     name: userContextStorage.getStore()?.email || 'System/Unknown',
@@ -65,23 +65,18 @@ export const SCHEMA: TransactionSchema<Penjualan, PenjualanDetail> = {
   },
 };
 
-
-
-
-
-
 export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = {
   getModuleSchema() {
     return SCHEMA;
   },
 
-
   async getAll() {
     await this.getLastTransaction();
     await this.getQueue();
+
+    triggerRealtimeEmit()
     return SCHEMA;
   },
-
 
   async getQueue() {
     const activeTransactions = await prisma.penjualan.findMany({
@@ -94,10 +89,7 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
     }))
 
     SCHEMA.queue.data = queue;
-    return SCHEMA.queue;
   },
-
-
 
   async getLastTransaction() {
     let lastTransaction = await prisma.penjualan.findFirst({
@@ -105,50 +97,29 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
       include: { details: true }
     });
 
-    // Jika ada transaksi terakhir, masukkan ke SCHEMA
     if (lastTransaction) {
       SCHEMA.header.data = lastTransaction;
       SCHEMA.details.data = lastTransaction.details || [];
-
-      return {
-        header: SCHEMA.header,
-        details: SCHEMA.details,
-      };
+    } else {
+      await this.newTransaction();
     }
-
-    // Jika kosong, buat transaksi baru yang otomatis set ke SCHEMA
-    return await this.newTransaction();
   },
-
-
-
 
   async getTransaction(id: number) {
     const transaction = await prisma.penjualan.findUnique({ where: { id: id }, include: { details: true } })
     SCHEMA.header.data = transaction;
     SCHEMA.details.data = transaction?.details || [];
-
-    return {
-      header: SCHEMA.header,
-      details: SCHEMA.details
-    };
   },
-
 
   async getHeader(id: number) {
     const header = await prisma.penjualan.findUnique({ where: { id: id } })
-    SCHEMA.header.data = header
-    return SCHEMA.header
+    SCHEMA.header.data = header;
   },
-
 
   async getDetails(headerId: number) {
     const details = await prisma.penjualanDetail.findMany({ where: { penjualanId: headerId } })
-    SCHEMA.details.data = details
-    return SCHEMA.details
+    SCHEMA.details.data = details;
   },
-
-
 
   async newTransaction() {
     const user = getLoggedUser();
@@ -164,11 +135,9 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
 
     SCHEMA.header.data = transaction;
     SCHEMA.details.data = transaction.details || [];
-    await this.getQueue()
-    return sendResponse(SCHEMA, { header: true, details: true, queue: true })
+    await this.getQueue();
+    triggerRealtimeEmit();
   },
-
-
 
   async updateHeader(id: number, body: Partial<Penjualan>) {
     const header = await prisma.$transaction(async (tx) => {
@@ -184,19 +153,11 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
     });
 
     SCHEMA.header.data = header;
-    await this.getQueue()
-    return await this.getTransaction(id)
+    await this.getQueue();
+    triggerRealtimeEmit();
   },
 
-
-
-
-
-
-
-
   async addDetails(headerId: any, body: { query: string | number; }) {
-
     const parsedHeaderId = parseInt(headerId, 10);
     if (isNaN(parsedHeaderId)) {
       throw new Error('ID Transaksi (headerId) tidak valid atau kosong');
@@ -224,12 +185,10 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
 
       await syncInvoiceTotalInternal(parsedHeaderId, tx);
     });
-    return await this.getTransaction(headerId)
+
+    await this.getTransaction(parsedHeaderId);
+    triggerRealtimeEmit();
   },
-
-
-
-
 
   async updateDetails(headerId: number, id: number, body: Partial<PenjualanDetail>) {
     await prisma.$transaction(async (tx) => {
@@ -244,32 +203,28 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
 
       await syncInvoiceTotalInternal(headerId, tx);
     });
-    return await this.getTransaction(headerId)
+
+    await this.getTransaction(headerId);
+    triggerRealtimeEmit();
   },
-
-
-
-
 
   async deleteDetails(headerId: number, id: number) {
     await prisma.$transaction(async (tx) => {
       await tx.penjualanDetail.delete({ where: { id } });
       await syncInvoiceTotalInternal(headerId, tx);
     });
-    return await this.getTransaction(headerId)
+
+    await this.getTransaction(headerId);
+    triggerRealtimeEmit();
   },
-
-
-
 
   async cancelTransaction(id: number) {
     await prisma.penjualan.delete({ where: { id } });
-    await this.getLastTransaction()
-    await this.getQueue()
-    return sendResponse(SCHEMA, { header: true, details: true, queue: true })
+    await this.getLastTransaction();
+    await this.getQueue();
+    
+    triggerRealtimeEmit();
   },
-
-
 
   async saveTransaction(id: number) {
     const finalInvoiceNo = await generateNewInvoiceNumber(SCHEMA);
@@ -278,12 +233,22 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
       data: { noInvoice: finalInvoiceNo }
     });
 
-    return await this.getLastTransaction()
+    await this.getLastTransaction();
+    triggerRealtimeEmit();
   },
-
 };
 
-// Fungsi internal yang aman dijalankan di dalam scope Prisma Transaction Client
+function triggerRealtimeEmit() {
+  const io = getSocketInstance();
+  if (io) {
+    io.emit('penjualan_getAll_updated', {
+      queue: SCHEMA.queue,
+      header: SCHEMA.header,
+      details: SCHEMA.details,
+    });
+  }
+}
+
 async function syncInvoiceTotalInternal(penjualanId: number, txClient: Prisma.TransactionClient): Promise<void> {
   const tx = await txClient.penjualan.findUnique({
     where: { id: penjualanId },
