@@ -62,71 +62,126 @@ export const SCHEMA: TransactionSchema<Penjualan, PenjualanDetail> = {
       { key: 'subtotal', label: 'Subtotal', readonly: true, type: 'computed', formula: '{quantity} * {price}', size: 250 }
     ],
     data: []
-  }
+  },
 };
+
+
+
+
+
 
 export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = {
   getModuleSchema() {
     return SCHEMA;
   },
 
+
+  async getAll() {
+    await this.getLastTransaction();
+    await this.getQueue();
+    return SCHEMA;
+  },
+
+
   async getQueue() {
     const activeTransactions = await prisma.penjualan.findMany({
       include: { customer: true },
     });
 
-    return activeTransactions.map(t => ({
+    const queue = activeTransactions.map(t => ({
       id: t.id,
       label: (t.customer as Customer | null)?.nmCustomer || 'Pelanggan Umum'
-    }));
+    }))
+
+    SCHEMA.queue.data = queue;
+    return SCHEMA.queue;
   },
 
-  async getHeader(id: number) {
-    return await prisma.penjualan.findUnique({ where: { id } });
-  },
 
-  async getDetails(headerId: number) {
-    return await prisma.penjualanDetail.findMany({ where: { penjualanId: headerId } });
-  },
 
   async getLastTransaction() {
-    const lastTx = await prisma.penjualan.findFirst({
-      orderBy: { id: 'desc' }
+    let lastTransaction = await prisma.penjualan.findFirst({
+      orderBy: { id: 'desc' },
+      include: { details: true }
     });
-    return lastTx || await this.newTransaction();
+
+    // Jika ada transaksi terakhir, masukkan ke SCHEMA
+    if (lastTransaction) {
+      SCHEMA.header.data = lastTransaction;
+      SCHEMA.details.data = lastTransaction.details || [];
+
+      return {
+        header: SCHEMA.header,
+        details: SCHEMA.details
+      };
+    }
+
+    // Jika kosong, buat transaksi baru yang otomatis set ke SCHEMA
+    return await this.newTransaction();
   },
+
+
+
+
+  async getTransaction(id: number) {
+    const transaction = await prisma.penjualan.findUnique({ where: { id: id }, include: { details: true } })
+    SCHEMA.header.data = transaction;
+    SCHEMA.details.data = transaction?.details || [];
+
+    return {
+      header: SCHEMA.header,
+      details: SCHEMA.details
+    };
+  },
+
+
+  async getHeader(id: number) {
+    const header = await prisma.penjualan.findUnique({ where: { id: id } })
+    SCHEMA.header.data = header
+    return SCHEMA.header
+  },
+
+
+  async getDetails(headerId: number) {
+    const details = await prisma.penjualanDetail.findMany({ where: { penjualanId: headerId } })
+    SCHEMA.details.data = details
+    return SCHEMA.details
+  },
+
+
 
   async newTransaction() {
     const user = getLoggedUser();
-    return await prisma.penjualan.create({
+    const transaction = await prisma.penjualan.create({
       data: {
         noInvoice: `DRAFT-${Date.now()}`,
         discount: new Prisma.Decimal(0),
         total: new Prisma.Decimal(0),
-        createdBy: user.name,
+        createdBy: user ? user.name : 'System',
       },
-    });
-  },
-
-  async getTransaction(id: number) {
-    const transaction = await prisma.penjualan.findUnique({
-      where: { id },
-      include: {
-        customer: true,
-        details: { include: { product: true } }
-      }
+      include: { details: true }
     });
 
-    if (!transaction) return null;
+    // Langsung set ke SCHEMA karena method ini dipakai juga untuk action lain
+    SCHEMA.header.data = transaction;
+    SCHEMA.details.data = transaction.details || [];
 
     return {
-      header: transaction,
-      details: transaction.details
+      header: SCHEMA.header,
+      details: SCHEMA.details
     };
   },
 
+
+
+
+
+
+
+
+
   async updateHeader(id: number, body: Partial<Penjualan>) {
-    return await prisma.$transaction(async (tx) => {
+    const header = await prisma.$transaction(async (tx) => {
       const updated = await tx.penjualan.update({
         where: { id },
         data: {
@@ -137,15 +192,26 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
       await syncInvoiceTotalInternal(id, tx);
       return updated;
     });
+
+    SCHEMA.header.data = header;
+    return SCHEMA.header;
   },
 
+
+
+
+
+
+
+
   async addDetails(headerId: any, body: { query: string | number; }) {
+
     const parsedHeaderId = parseInt(headerId, 10);
     if (isNaN(parsedHeaderId)) {
       throw new Error('ID Transaksi (headerId) tidak valid atau kosong');
     }
 
-    return await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       const isNumericQuery = !isNaN(Number(body.query));
       const product = await tx.product.findFirst({
         where: isNumericQuery
@@ -155,7 +221,7 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
 
       if (!product) throw new Error('Produk tidak ditemukan');
 
-      const newDetail = await tx.penjualanDetail.create({
+      await tx.penjualanDetail.create({
         data: {
           nmProduct: product.name,
           quantity: 1,
@@ -166,51 +232,62 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
       });
 
       await syncInvoiceTotalInternal(parsedHeaderId, tx);
-      return newDetail;
     });
+    return await this.getTransaction(headerId)
   },
 
+
+
+
+
   async updateDetails(headerId: number, id: number, body: Partial<PenjualanDetail>) {
-    return await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       const dataUpdate: Prisma.PenjualanDetailUpdateInput = {};
       if (body.quantity !== undefined) dataUpdate.quantity = Number(body.quantity);
       if (body.price !== undefined) dataUpdate.price = new Prisma.Decimal(body.price as any);
 
-      const updatedDetail = await tx.penjualanDetail.update({
+      await tx.penjualanDetail.update({
         where: { id },
         data: dataUpdate,
       });
 
       await syncInvoiceTotalInternal(headerId, tx);
-      return updatedDetail;
     });
+    return await this.getTransaction(headerId)
   },
 
+
+
+
+
   async deleteDetails(headerId: number, id: number) {
-    return await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       await tx.penjualanDetail.delete({ where: { id } });
       await syncInvoiceTotalInternal(headerId, tx);
-      return true;
     });
+    return await this.getTransaction(headerId)
   },
+
+
+
 
   async cancelTransaction(id: number) {
     await prisma.penjualan.delete({ where: { id } });
-    return true;
+    return await this.getLastTransaction()
   },
+
+
 
   async saveTransaction(id: number) {
     const finalInvoiceNo = await generateNewInvoiceNumber(SCHEMA);
-
-    return await prisma.penjualan.update({
+    await prisma.penjualan.update({
       where: { id },
       data: { noInvoice: finalInvoiceNo }
     });
+
+    return await this.getLastTransaction()
   },
 
-  searchData: function (keyword: string): Promise<any> {
-    throw new Error('Function not implemented.');
-  }
 };
 
 // Fungsi internal yang aman dijalankan di dalam scope Prisma Transaction Client

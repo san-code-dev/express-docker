@@ -120,7 +120,7 @@ export interface MasterSchema<T = any> {
   label: string;
   type: 'master';
   isMenuHidden: boolean;
-  permissions: { create: boolean; edit: boolean; delete: boolean; [key: string]: boolean };
+  permissions: { create: boolean; edit: boolean; delete: boolean;[key: string]: boolean };
   actions?: Array<{ key: string; label: string; type: string }>;
   schema: ColumnSchema<T>[]; // Generic T mengunci kolom ke model Master
   data?: T[];
@@ -133,7 +133,7 @@ export interface TransactionSchema<H = any, D = any, Q = BaseQueueItem> {
   prefix: string;
   type: 'transaction';
   isMenuHidden: boolean;
-  permissions: { create: boolean; edit: boolean; delete: boolean; [key: string]: boolean };
+  permissions: { create: boolean; edit: boolean; delete: boolean;[key: string]: boolean };
   actions?: Array<{ key: string; label: string; type: string }>;
   queue: Queue<Q>;
   header: { label: string; schema: ColumnSchema<H>[]; data?: H | null }; // Generic H mengunci kolom Header
@@ -156,19 +156,19 @@ export interface MasterService<T> {
 
 export interface TransactionService<H = any, D = any, Q = BaseQueueItem> {
   getModuleSchema(): TransactionSchema<H, D, Q>;
-  getQueue(): Promise<Q[]>;
-  getHeader(id: number): Promise<H | null>;
-  getDetails(headerId: number): Promise<D[]>;
+  getAll(): any;
+  getQueue(): any;
+  getHeader(id: number): any;
+  getDetails(headerId: number): any;
 
-  newTransaction(body?: Partial<H>): Promise<H>;
-  getTransaction(id: number): Promise<{ header: H; details: any[] } | null>;
-  getLastTransaction(): Promise<H | null>;
-  cancelTransaction(id: number, body?: any): Promise<boolean>;
-  saveTransaction(id: number, body?: any): Promise<H>;
-  updateHeader(id: number, body: Partial<H>): Promise<H>;
+  newTransaction(body?: Partial<H>): any;
+  getTransaction(id: number): any;
+  getLastTransaction(): any;
+  cancelTransaction(id: number, body?: any): any;
+  saveTransaction(id: number, body?: any): any;
+  updateHeader(id: number, body: Partial<H>): any;
 
-  addDetails(headerId: number, body: any): Promise<D>;
-  updateDetails(headerId: number, id: number, body: Partial<D>): Promise<D>;
-  deleteDetails(headerId: number, id: number): Promise<boolean>;
-  searchData(keyword: string): Promise<any>;
+  addDetails(headerId: number, body: any): any;
+  updateDetails(headerId: number, id: number, body: Partial<D>): any;
+  deleteDetails(headerId: number, id: number): any;
 }
