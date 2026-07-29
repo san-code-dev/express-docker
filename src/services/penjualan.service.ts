@@ -3,7 +3,7 @@ import { Prisma, Penjualan, PenjualanDetail, Customer } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { userContextStorage } from '../utils/context';
 import { TransactionSchema, TransactionService } from '../interface/base.interface';
-import { generateNewInvoiceNumber } from '../utils/erpUtils';
+import { generateNewInvoiceNumber, sendResponse } from '../utils/erpUtils';
 
 // Helper fungsi agar evaluasi context user bersifat dinamis per request
 function getLoggedUser() {
@@ -112,7 +112,7 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
 
       return {
         header: SCHEMA.header,
-        details: SCHEMA.details
+        details: SCHEMA.details,
       };
     }
 
@@ -162,21 +162,11 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
       include: { details: true }
     });
 
-    // Langsung set ke SCHEMA karena method ini dipakai juga untuk action lain
     SCHEMA.header.data = transaction;
     SCHEMA.details.data = transaction.details || [];
-
-    return {
-      header: SCHEMA.header,
-      details: SCHEMA.details
-    };
+    await this.getQueue()
+    return sendResponse(SCHEMA, { header: true, details: true, queue: true })
   },
-
-
-
-
-
-
 
 
 
@@ -194,7 +184,8 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
     });
 
     SCHEMA.header.data = header;
-    return SCHEMA.header;
+    await this.getQueue()
+    return await this.getTransaction(id)
   },
 
 
@@ -273,7 +264,9 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
 
   async cancelTransaction(id: number) {
     await prisma.penjualan.delete({ where: { id } });
-    return await this.getLastTransaction()
+    await this.getLastTransaction()
+    await this.getQueue()
+    return sendResponse(SCHEMA, { header: true, details: true, queue: true })
   },
 
 

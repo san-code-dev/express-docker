@@ -19,3 +19,16 @@ export const generateNewInvoiceNumber = async (SCHEMA: TransactionSchema): Promi
 
   return `${SCHEMA.prefix}-${yearMonth}-${String(currentIncrement).padStart(4, '0')}`;
 }
+
+
+export const sendResponse= async (SCHEMA:any,options: { header?: boolean; details?: boolean; queue?: boolean, master?:boolean,highlight?:boolean }) =>{
+  const result: Record<string, any> = {};
+
+  if (options.queue) result.queue = SCHEMA.queue;
+  if (options.header) result.header = SCHEMA.header;
+  if (options.details) result.details = SCHEMA.details;
+  if (options.master) result.master = SCHEMA.master;
+  if (options.highlight) result.highlight = SCHEMA.highlight;
+
+  return result;
+}
