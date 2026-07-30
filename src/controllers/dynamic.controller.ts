@@ -2,6 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ModuleRegistry } from '../services/index';
 import { getSocketInstance } from '../lib/socket'; // <--- Import helper socket
+import { userContextStorage } from '../utils/context';
 
 const getModuleByKey = (key: string) => {
   return ModuleRegistry.find(m => m.schema.key.toLowerCase() === key.toLowerCase());
@@ -80,13 +81,19 @@ export const handleDynamicRequest = () => {
         // =========================================================================
         // BROADCAST REAL-TIME OTOMATIS (Menggunakan getSocketInstance)
         // =========================================================================
+        // Di dalam dynamic.controller.ts
         const io = getSocketInstance();
-        if (httpMethod !== 'GET' && io) {
-          io.emit(`realtime_update:${service_key}`, {
+        const userId = await userContextStorage.getStore()?.id
+
+        if (httpMethod !== 'GET' && io && userId) {
+          // Mengirim ke room user tertentu dengan format event yang dinamis
+          io.to(`user_${userId}`).emit(`realtime_update:${service_key}`, {
             action,
             service: service_key,
-            data: result
+            data: result // Hasil eksekusi dari service
           });
+        }else{
+          console.log('User id kosong/undefined socket.io tidak bisa dibuat!',userId)
         }
         // =========================================================================
 

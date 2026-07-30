@@ -37,15 +37,19 @@ const authController = {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: 60 * 60 * 1000, // 1 Jam
+        maxAge: 60 * 60 * 1000,
       });
 
-      // 🔥 KUNCI PERBAIKAN: Generate menu secara dinamis dari Service yang terdaftar
       const dynamicMenu = await generateDynamicMenu();
 
       return res.json({
         message: "Login berhasil",
-        menu: dynamicMenu // 🌟 Sekarang 100% dinamis mengikuti dynamic routes!
+        menu: dynamicMenu,
+        user: {          // 🔥 TAMBAHKAN INI
+          id: user.id,
+          email: user.email,
+          role: user.role
+        }
       });
       
     } catch (error) {

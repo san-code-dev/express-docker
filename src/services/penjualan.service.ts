@@ -74,7 +74,7 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
     await this.getLastTransaction();
     await this.getQueue();
 
-    triggerRealtimeEmit()
+    triggerRealtimeEmit();
     return SCHEMA;
   },
 
@@ -86,13 +86,16 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
     const queue = activeTransactions.map(t => ({
       id: t.id,
       label: (t.customer as Customer | null)?.nmCustomer || 'Pelanggan Umum'
-    }))
+    }));
 
     SCHEMA.queue.data = queue;
   },
 
   async getLastTransaction() {
     let lastTransaction = await prisma.penjualan.findFirst({
+      where: {
+        noInvoice: { startsWith: 'DRAFT-' }
+      },
       orderBy: { id: 'desc' },
       include: { details: true }
     });
@@ -106,18 +109,19 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
   },
 
   async getTransaction(id: number) {
-    const transaction = await prisma.penjualan.findUnique({ where: { id: id }, include: { details: true } })
+    const transaction = await prisma.penjualan.findUnique({ where: { id: id }, include: { details: true } });
     SCHEMA.header.data = transaction;
     SCHEMA.details.data = transaction?.details || [];
+    triggerRealtimeEmit();
   },
 
   async getHeader(id: number) {
-    const header = await prisma.penjualan.findUnique({ where: { id: id } })
+    const header = await prisma.penjualan.findUnique({ where: { id: id } });
     SCHEMA.header.data = header;
   },
 
   async getDetails(headerId: number) {
-    const details = await prisma.penjualanDetail.findMany({ where: { penjualanId: headerId } })
+    const details = await prisma.penjualanDetail.findMany({ where: { penjualanId: headerId } });
     SCHEMA.details.data = details;
   },
 
@@ -210,7 +214,18 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
 
   async deleteDetails(headerId: number, id: number) {
     await prisma.$transaction(async (tx) => {
-      await tx.penjualanDetail.delete({ where: { id } });
+      const existing = await tx.penjualanDetail.findUnique({
+        where: { id: Number(id) }
+      });
+
+      if (!existing) {
+        throw new Error(`Detail penjualan dengan ID ${id} tidak ditemukan.`);
+      }
+
+      await tx.penjualanDetail.delete({
+        where: { id: Number(id) }
+      });
+
       await syncInvoiceTotalInternal(headerId, tx);
     });
 
@@ -222,7 +237,7 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
     await prisma.penjualan.delete({ where: { id } });
     await this.getLastTransaction();
     await this.getQueue();
-    
+
     triggerRealtimeEmit();
   },
 
@@ -241,10 +256,13 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
 function triggerRealtimeEmit() {
   const io = getSocketInstance();
   if (io) {
-    io.emit('penjualan_getAll_updated', {
-      queue: SCHEMA.queue,
-      header: SCHEMA.header,
-      details: SCHEMA.details,
+    // Disesuaikan agar menggunakan key dinamis 'realtime_update:penjualan'
+    io.emit(`realtime_update:${SCHEMA.key}`, {
+      data: {
+        queue: SCHEMA.queue,
+        header: SCHEMA.header,
+        details: SCHEMA.details,
+      }
     });
   }
 }

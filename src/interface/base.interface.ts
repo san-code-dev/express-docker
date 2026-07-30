@@ -146,12 +146,12 @@ export interface TransactionSchema<H = any, D = any, Q = BaseQueueItem> {
 
 export interface MasterService<T> {
   getModuleSchema(): MasterSchema<T>;
-  getAll(filter?: Record<string, any>): Promise<T[]>;
-  getById(key: string | number): Promise<T | null>;
-  create(body: Partial<T>): Promise<T>;
-  update(key: string | number, body: Partial<T>): Promise<T>;
-  delete(key: string | number): Promise<boolean>;
-  searchData(keyword: string): Promise<any>;
+  getAll(filter?: Record<string, any>):any;
+  getById(key: string | number):any;
+  create(body: Partial<T>):any;
+  update(key: string | number, body: Partial<T>):any;
+  delete(key: string | number):any;
+  searchData(keyword: string):any;
 }
 
 export interface TransactionService<H = any, D = any, Q = BaseQueueItem> {

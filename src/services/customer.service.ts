@@ -20,7 +20,7 @@ export const SCHEMA: MasterSchema<Customer> = {
     { key: 'telepon', label: 'No Telp', type: 'text', size: 200 },
     { key: 'alamat', label: 'Address', type: 'textarea' },
   ],
-  // Data dibiarkan kosong secara default
+  data: [] // Diinisialisasi sebagai array kosong sesuai pola standar
 };
 
 // 2. Terapkan Generic <Customer> pada implementasi Service
@@ -29,7 +29,7 @@ export const CustomerService: MasterService<Customer> = {
     return SCHEMA;
   },
 
-  async getAll(filter?: Record<string, any>): Promise<Customer[]> {
+  async getAll(filter?: Record<string, any>): Promise<MasterSchema<Customer>> {
     const prismaFilter = parseFilterToPrisma(filter) || {};
 
     const customers = await prisma.customer.findMany({
@@ -40,11 +40,9 @@ export const CustomerService: MasterService<Customer> = {
     });
 
     SCHEMA.data = customers;
-    
-    // Broadcast data terbaru saat getAll dipanggil
     triggerRealtimeEmit();
 
-    return customers;
+    return SCHEMA;
   },
 
   async getById(key: string | number): Promise<Customer | null> {
@@ -55,8 +53,8 @@ export const CustomerService: MasterService<Customer> = {
     });
   },
 
-  async create(body: Partial<Customer>): Promise<Customer> {
-    const customer = await prisma.customer.create({
+  async create(body: Partial<Customer>): Promise<MasterSchema<Customer>> {
+    await prisma.customer.create({
       data: {
         nmCustomer: body.nmCustomer || 'New Customer',
         email: body.email || '',
@@ -65,14 +63,10 @@ export const CustomerService: MasterService<Customer> = {
       }
     });
 
-    // Perbarui data di schema dan trigger realtime ke frontend
-    await refreshSchemaData();
-    triggerRealtimeEmit();
-
-    return customer;
+    return await this.getAll();
   },
 
-  async update(key: string | number, body: Partial<Customer>): Promise<Customer> {
+  async update(key: string | number, body: Partial<Customer>): Promise<MasterSchema<Customer>> {
     const id = Number(key);
     const oldData = await prisma.customer.findFirst({
       where: { id }
@@ -87,19 +81,15 @@ export const CustomerService: MasterService<Customer> = {
     if (body.telepon !== undefined) dataUpdate.telepon = body.telepon;
     if (body.alamat !== undefined) dataUpdate.alamat = body.alamat;
 
-    const updatedCustomer = await prisma.customer.update({
+    await prisma.customer.update({
       where: { id },
       data: dataUpdate
     });
 
-    // Perbarui data di schema dan trigger realtime ke frontend
-    await refreshSchemaData();
-    triggerRealtimeEmit();
-
-    return updatedCustomer;
+    return await this.getAll();
   },
 
-  async delete(key: string | number): Promise<boolean> {
+  async delete(key: string | number): Promise<MasterSchema<Customer>> {
     const id = Number(key);
     const oldData = await prisma.customer.findFirst({
       where: { id }
@@ -111,68 +101,52 @@ export const CustomerService: MasterService<Customer> = {
       where: { id },
     });
 
-    // Perbarui data di schema dan trigger realtime ke frontend
-    await refreshSchemaData();
-    triggerRealtimeEmit();
-
-    return true;
+    return await this.getAll();
   },
 
-  searchData: async function (keyword: string): Promise<MasterSchema<Customer>> {
+  searchData: async function (keyword: string): Promise<Customer[]> {
     const cleanKeyword = keyword.trim();
     let data: Customer[] = [];
 
     if (cleanKeyword) {
-        const numId = Number(cleanKeyword);
-        const isValidNumber = !isNaN(numId);
+      const numId = Number(cleanKeyword);
+      const isValidNumber = !isNaN(numId);
 
-        const orConditions: Prisma.CustomerWhereInput[] = [
-            { nmCustomer: { contains: cleanKeyword, mode: 'insensitive' } },
-            { email: { contains: cleanKeyword, mode: 'insensitive' } },
-            { telepon: { contains: cleanKeyword, mode: 'insensitive' } },
-            { alamat: { contains: cleanKeyword, mode: 'insensitive' } },
-        ];
+      const orConditions: Prisma.CustomerWhereInput[] = [
+        { nmCustomer: { contains: cleanKeyword, mode: 'insensitive' } },
+        { email: { contains: cleanKeyword, mode: 'insensitive' } },
+        { telepon: { contains: cleanKeyword, mode: 'insensitive' } },
+        { alamat: { contains: cleanKeyword, mode: 'insensitive' } },
+      ];
 
-        if (isValidNumber) {
-            orConditions.push({ id: numId });
-        }
+      if (isValidNumber) {
+        orConditions.push({ id: numId });
+      }
 
-        data = await prisma.customer.findMany({
-            where: {
-                OR: orConditions,
-            },
-        });
+      data = await prisma.customer.findMany({
+        where: {
+          OR: orConditions,
+        },
+      });
     } else {
-        data = await this.getAll();
+      const customers = await prisma.customer.findMany({
+        orderBy: { createdAt: 'asc' }
+      });
+      data = customers;
     }
 
-    if (!data || data.length === 0) {
-        throw new Error('Customer tidak ditemukan');
-    }
-
-    SCHEMA.data = data;
-
-    const schemaResponse: MasterSchema<Customer> = {
-        ...structuredClone(SCHEMA),
-        data: data,
-    };
-
-    return schemaResponse;
+    return data;
   }
 };
 
-// Helper untuk menyegarkan data list di dalam global SCHEMA
-async function refreshSchemaData() {
-  const customers = await prisma.customer.findMany({
-    orderBy: { createdAt: 'asc' }
-  });
-  SCHEMA.data = customers;
-}
-
-// Helper untuk mengirim event realtime via WebSocket
+// Helper untuk mengirim event realtime via WebSocket agar seragam formatnya
 function triggerRealtimeEmit() {
   const io = getSocketInstance();
   if (io) {
-    io.emit('customer_getAll_updated', SCHEMA);
+    io.emit(`realtime_update:${SCHEMA.key}`, {
+      data: {
+        data: SCHEMA.data,
+      }
+    });
   }
 }
