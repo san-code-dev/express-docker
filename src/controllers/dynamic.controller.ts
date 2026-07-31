@@ -15,6 +15,9 @@ export const handleDynamicRequest = () => {
       const httpMethod = req.method.toUpperCase();
 
       console.log(`\n--- [DYNAMIC ROUTE] ${httpMethod} /${service_key}/${action} ---`);
+      console.log(`[Route]: ${httpMethod} /${service_key}/${action}`);
+      console.log(`[Body]:`, req.body);
+      console.log(`[Query]:`, req.query);
 
       const module = getModuleByKey(service_key);
       if (!module) {
@@ -92,8 +95,8 @@ export const handleDynamicRequest = () => {
             service: service_key,
             data: result // Hasil eksekusi dari service
           });
-        }else{
-          console.log('User id kosong/undefined socket.io tidak bisa dibuat!',userId)
+        } else {
+          console.log('User id kosong/undefined socket.io tidak bisa dibuat!', userId)
         }
         // =========================================================================
 
@@ -101,9 +104,6 @@ export const handleDynamicRequest = () => {
 
       } catch (err: any) {
         console.error(`\n 🚨 [DYNAMIC ROUTE RUNTIME ERROR] `);
-        console.error(`[Route]: ${httpMethod} /${service_key}/${action}`);
-        console.error(`[Body]:`, req.body);
-        console.error(`[Query]:`, req.query);
         console.error('\x1b[31m%s\x1b[0m', `[Error]: ${err.message}`);
 
         return res.status(500).json({

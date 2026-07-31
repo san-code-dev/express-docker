@@ -56,10 +56,7 @@ export const CustomerService: MasterService<Customer> = {
   async create(body: Partial<Customer>): Promise<MasterSchema<Customer>> {
     await prisma.customer.create({
       data: {
-        nmCustomer: body.nmCustomer || 'New Customer',
-        email: body.email || '',
-        telepon: body.telepon,
-        alamat: body.alamat,
+        nmCustomer: 'New Customer',
       }
     });
 

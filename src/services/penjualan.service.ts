@@ -47,7 +47,7 @@ export const SCHEMA: TransactionSchema<Penjualan, PenjualanDetail> = {
         }, validation: { required: true }
       },
       { key: 'discount', label: 'Potongan Diskon', type: 'currency' },
-      { key: 'total', label: 'Total Bayar', type: 'currency', readonly: true, highlight: true, isHidden: true },
+      { key: 'total', label: 'Total Bayar', type: 'currency', readonly: true, highlight: true },
     ],
     data: null
   },
@@ -78,18 +78,28 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
     return SCHEMA;
   },
 
-  async getQueue() {
+async getQueue() {
     const activeTransactions = await prisma.penjualan.findMany({
       include: { customer: true },
+      orderBy: { id: 'asc' }, // Pastikan urutan berdasarkan ID atau waktu pembuatan agar nomor antrean konsisten
     });
 
-    const queue = activeTransactions.map(t => ({
-      id: t.id,
-      label: (t.customer as Customer | null)?.nmCustomer || 'Pelanggan Umum'
-    }));
+    const queue = activeTransactions.map((t, index) => {
+      const customerName = (t.customer as Customer | null)?.nmCustomer;
+      const queueNumber = index + 1; // Menghasilkan nomor urut (1, 2, 3, dst.)
+
+      return {
+        id: t.id,
+        // Format label menjadi: "No. 1 - Nama Customer" atau fallback ke nomor urut jika customer kosong
+        label: customerName 
+          ? `No. ${queueNumber} #${customerName}` 
+          : `No. ${queueNumber}`
+      };
+    });
 
     SCHEMA.queue.data = queue;
   },
+
 
   async getLastTransaction() {
     let lastTransaction = await prisma.penjualan.findFirst({
@@ -150,6 +160,7 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
         data: {
           customerId: body.customerId ? Number(body.customerId) : null,
           discount: body.discount !== undefined ? new Prisma.Decimal(body.discount as any) : undefined,
+          createdAt: body.createdAt ? new Date(body.createdAt) : undefined,
         }
       });
       await syncInvoiceTotalInternal(id, tx);
