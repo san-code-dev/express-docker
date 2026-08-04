@@ -1,0 +1,3 @@
+- SCHEMA belum di personalisasi per user
+- rate limit koneksi
+- field yang didefinisikan di SCHEMA tidak selalu mirip di schema prisma jadi body parameter dari service method tidak boleh ikut object table prisma tapi harus ikut format schema

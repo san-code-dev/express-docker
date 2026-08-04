@@ -63,7 +63,9 @@ export const SCHEMA: TransactionSchema<Penjualan, PenjualanDetail> = {
     ],
     data: []
   },
-};
+} as const;
+
+type HeaderBodyInput = Partial<Record<typeof SCHEMA.header.schema[number]['key'], unknown>>;
 
 export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = {
   getModuleSchema() {
@@ -78,7 +80,7 @@ export const PenjualanService: TransactionService<Penjualan, PenjualanDetail> = 
     return SCHEMA;
   },
 
-async getQueue() {
+  async getQueue() {
     const activeTransactions = await prisma.penjualan.findMany({
       include: { customer: true },
       orderBy: { id: 'asc' }, // Pastikan urutan berdasarkan ID atau waktu pembuatan agar nomor antrean konsisten
@@ -91,8 +93,8 @@ async getQueue() {
       return {
         id: t.id,
         // Format label menjadi: "No. 1 - Nama Customer" atau fallback ke nomor urut jika customer kosong
-        label: customerName 
-          ? `No. ${queueNumber} #${customerName}` 
+        label: customerName
+          ? `No. ${queueNumber} #${customerName}`
           : `No. ${queueNumber}`
       };
     });
@@ -153,14 +155,15 @@ async getQueue() {
     triggerRealtimeEmit();
   },
 
-  async updateHeader(id: number, body: Partial<Penjualan>) {
+
+  async updateHeader(id: number, body: any) {
     const header = await prisma.$transaction(async (tx) => {
       const updated = await tx.penjualan.update({
         where: { id },
         data: {
-          customerId: body.customerId ? Number(body.customerId) : null,
-          discount: body.discount !== undefined ? new Prisma.Decimal(body.discount as any) : undefined,
-          createdAt: body.createdAt ? new Date(body.createdAt) : undefined,
+          customerId: body.customerId,
+          discount: body.discount,
+          createdAt: body.date,
         }
       });
       await syncInvoiceTotalInternal(id, tx);
